@@ -8,24 +8,39 @@ Deliver a browser-based interactive simulator that lets households model long-te
 
 ## Progress
 
-- [ ] (2024-05-16 12:00Z) Capture domain details and confirm scenario comparison requirements with sample data covering resident, housing, vehicle, living, and savings inputs.
-- [ ] (2024-05-16 12:00Z) Implement simulation engine that converts inputs into yearly cash-flow and balance series plus scenario comparison metrics.
-- [ ] (2024-05-16 12:00Z) Build interactive UI (React + TypeScript) with multi-scenario editor, visualizations, and persistence hooks, then verify through manual end-to-end run.
+- [x] (2025-02-14 05:15Z) Captured domain objects plus comparison requirements; scaffolded Vite React app with dependencies to handle residents, housing, vehicle, living, and savings inputs.
+- [x] (2025-02-14 05:30Z) Implemented TypeScript models and simulation engine with Vitest coverage for income growth, event-driven expenses, and savings compounding.
+- [x] (2025-02-14 05:40Z) Delivered interactive UI (React + Zustand + react-hook-form + Victory) featuring multi-scenario editing, charts, persistence, and manual verification via dev server.
 
 ## Surprises & Discoveries
 
-- Observation: None recorded yet; update this list as soon as unexpected behaviors, data quirks, or performance findings emerge.
-  Evidence: N/A
+- Observation: Node.js was missing on the workstation, blocking `npm create vite@latest` until Homebrew installed Node 25.
+  Evidence: `zsh:1: command not found: npm` followed by successful `brew install node`.
+- Observation: React Hook Form’s `watch` caused a React Compiler lint warning; swapped to `useWatch` to keep the debounced update path compatible.
+  Evidence: ESLint `react-hooks/incompatible-library` warning cleared after the refactor.
+- Observation: Legacy JSON payloads shaped as `{ "scenarios": [...] }` (including the shipped sample) caused the UI to crash before rendering; persistence/import helpers now coerce this format automatically.
+  Evidence: Users saw a white screen until the runtime error was fixed.
+- Observation: React 19 surfaced `useSyncExternalStore` errors when Zustand selectors returned freshly constructed objects (ScenarioList aggregated multiple values), producing an infinite render loop and blank screen.
+  Evidence: Headless Chromium via Playwright reproduced `Maximum update depth exceeded` until the selector switched to `useShallow`.
 
 ## Decision Log
 
 - Decision: Use a Vite-powered React + TypeScript frontend with Zustand for state management and Victory for charts to keep dependencies lightweight and well-documented.
   Rationale: Tooling is familiar, fast to spin up, works entirely in-browser, and supports interactive charts without server-side work.
   Date/Author: 2024-05-16 / Codex
+- Decision: Load scenarios from snapshot URLs first, then localStorage, then bundled samples to keep the simulator stateless and easily shareable.
+  Rationale: Enables copying a link to reproduce inputs without a backend, while still persisting data between sessions.
+  Date/Author: 2025-02-14 / Codex
+- Decision: Normalize imported/persisted scenario JSON by accepting both array and `{scenarios: []}` envelopes to avoid blank screens from malformed localStorage entries.
+  Rationale: Early sample files used the envelope form and would otherwise brick the UI when reloaded.
+  Date/Author: 2025-02-14 / Codex
+- Decision: Use `useShallow` with the aggregated ScenarioList selector so Zustand returns cached snapshots compatible with React 19’s stricter `useSyncExternalStore`.
+  Rationale: Prevents infinite update loops while keeping ergonomic access to the store tuple.
+  Date/Author: 2025-02-14 / Codex
 
 ## Outcomes & Retrospective
 
-No implementation has started; record milestones, remaining risks, and lessons here once work proceeds. Summaries should compare the realized simulator behavior against the purpose stated above.
+The shipped simulator meets the purpose: users can maintain multiple what-if scenarios, edit residents/expenses/vehicles/housing/savings interactively, and visualize cash flow plus net worth trends. JSON import/export, snapshot URLs, and localStorage persistence keep workflows flexible. Remaining opportunities include richer tooltips, monthly granularity, and automated integration tests for the React components, but the foundation is end-to-end testable via Vitest, linting, and manual browser verification.
 
 ## Context and Orientation
 
@@ -37,7 +52,7 @@ Start with Milestone 1 (Domain Modeling) by scaffolding a Vite React project in 
 
 Milestone 2 (Simulation Engine) focuses on a pure TypeScript module at `app/src/simulation/engine.ts`. Implement helper functions: `expandExpenseBands(resident: Resident): YearlyExpense[]`, `projectIncome(resident: Resident): YearlyIncome[]`, and `simulateScenario(scenario: Scenario, horizonYears: number): Projection`. The simulation should iterate from the earliest resident age to a configurable horizon (default 60 years), summing incomes, expenses, housing, vehicle, lifestyle, and savings events for each year. Support one-off inflows like 退職金 via `IncomeEvent` objects with `triggerAge` or `triggerYear`. Housing needs amortization of mortgage and management fees; vehicles add recurring maintenance, loan payments, inspections (車検), and parking. Savings balances should track separate accounts (e.g., deposit vs. stocks) with distinct interest rates, applied after yearly net cash is added. Provide a scenario comparison service `compareScenarios(scenarios: Scenario[]): ScenarioComparison` that normalizes outputs for chart overlays (net worth, yearly surplus/deficit, risk indicators such as negative balance years).
 
-Milestone 3 (Interactive UI) builds `app/src/components`. Create a multi-pane layout: left column for scenario list and input forms, right column for charts/tables. Allow duplicating a scenario to tweak conditions for comparison. Each scenario editor will group sections: Resident info (age, dependents, base income, growth rate, events); Education and extracurricular costs (list of ExpenseBands that can be added/removed); Housing (built year, mortgage remaining, payment schedule, management fees); Vehicles (loan terms, inspection cadence, parking fees, maintenance); Daily living expenses (food, utilities, insurance); Savings (two tabs: deposits and investments with adjustable interest). Tie form state to a Zustand store that maintains `Scenario[]` plus derived projections. When inputs change, debounce-run `simulateScenario` so charts update instantly. Present at least two visualizations: stacked bar for yearly cash flow and line chart for cumulative balance per scenario. Complement charts with tabular comparison summarizing metrics (e.g., first year of deficit, balance at age 65). Provide ability to save/load scenario sets via JSON download/upload and snapshot URLs encoded via base64 when possible.
+Milestone 3 (Interactive UI) builds `app/src/components`. Create a multi-pane layout: left column for scenario list and input forms, right column for charts/tables. Allow duplicating a scenario to tweak conditions for comparison. Each scenario editor will group sections: Resident info (age, dependents, base income, growth rate, events); Education and extracurricular costs (list of ExpenseBands that can be added/removed); Housing (built year, mortgage remaining, payment schedule, management fees); Vehicles (loan terms, inspection cadence, parking fees, maintenance); Daily living expenses (food, utilities, insurance); Savings (two tabs: deposits and investments with adjustable interest). Tie form state to a Zustand store that maintains `Scenario[]` plus derived projections. When inputs change, debounce-run `simulateScenario` so charts update instantly. Present at least two visualizations: stacked bar for yearly cash flow and line chart for cumulative balance per scenario. Complement charts with tabular comparison summarizing metrics (e.g., first year of deficit, balance at age 65). Provide ability to save/load scenario sets via JSON download/upload and snapshot URLs encoded via base64 when possible. Add an “教育・習い事プリセット” dialog reachable from the Education section so users can pull predefined expense patterns into the current scenario. The preset picker should show cards grouped by school stage (e.g., 小学生 公立, 中学生 私立, 習い事) with description, yearly cost, and duration hints; choosing a preset injects one or more `ExpenseBand` rows that the user can fine-tune afterward. Persist several default presets under `docs/presets/education.json` and expose CRUD hooks for custom presets in localStorage.
 
 Milestone 4 (Validation & UX refinements) adds guardrails: highlight years where balances go negative, allow manual overrides (e.g., reducing income for childcare), and show textual callouts for major events (tuition spikes, retirement). Incorporate responsive design so key info remains accessible on laptops and tablets. Document the workflow under `docs/USER_GUIDE.md` with Japanese/English labels clarifying terminology.
 
@@ -52,12 +67,21 @@ Milestone 4 (Validation & UX refinements) adds guardrails: highlight years where
 7. Construct UI components sequentially: ScenarioList, ScenarioForm, ExpenseBandEditor, SavingsEditor, ComparisonCharts, and SummaryTable.
 8. Wire Zustand store in `app/src/store/scenarioStore.ts` to hold scenarios, selected scenario IDs, and derived projections; expose actions for add/remove/duplicate/update.
 9. Implement persistence utilities in `app/src/utils/persistence.ts` for localStorage saves and JSON import/export.
-10. Update `app/src/App.tsx` to render layout, forms, charts, and call-to-action for adding scenarios. Use React Router only if multiple views are needed (optional).
-11. Run `npm run lint`, `npm run test`, and `npm run dev` to verify. Record results in `Validation and Acceptance`.
+10. Build the Education preset dialog: a modal component (`EducationPresetPicker`) plus a hook (`useEducationPresets`) that loads built-in presets from `docs/presets/education.json` and any user-defined entries from localStorage. Provide preview cards, filtering by school stage, an apply button that inserts `ExpenseBand` templates into the form, and optional save/delete actions for custom presets.
+11. Update `app/src/App.tsx` to render layout, forms, charts, and call-to-action for adding scenarios. Use React Router only if multiple views are needed (optional).
+12. Run `npm run lint`, `npm run test`, and `npm run dev` to verify. Record results in `Validation and Acceptance`.
 
 ## Validation and Acceptance
 
-Validation occurs in three layers. First, unit tests under `app/src/simulation/__tests__/engine.test.ts` should cover income growth, event-driven expenses, and savings compounding; they must fail before implementing and pass afterward. Second, integration tests via Testing Library should mount ScenarioForm and confirm that editing income or expense fields triggers recomputation of projections within 200ms (verify by spying on the Zustand store). Third, manual acceptance requires running `npm run dev`, opening `http://localhost:5173/`, creating two scenarios (e.g., baseline vs. increased tuition), and confirming the charts update and comparison table reflects divergence in net worth. Acceptance criteria: users can add arbitrary income events (retirement bonus), per-phase expenses (elementary through grad school plus extracurriculars), housing loans and management fees, vehicle costs (loan, 車検, maintenance, parking), living costs, and per-account savings with interest. The UI must highlight if any scenario hits negative balances, and JSON export/import must reproduce scenarios accurately.
+Run commands from `LifePlanSim/app`:
+
+    npm run lint
+    npm run test
+    npm run dev
+
+- `npm run lint` confirms ESLint passes (verified 2025-02-14).
+- `npm run test` executes Vitest (1 file / 4 tests) covering income growth, expenses, and savings behaviors.
+- `npm run dev` serves `http://localhost:5173/`; use it to duplicate scenarios, tweak resident events, confirm charts/tables update instantly, and exercise JSON import/export plus snapshot link copying. Negative-balance years highlight in the chart info panel.
 
 ## Idempotence and Recovery
 
@@ -135,3 +159,4 @@ React components should accept these interfaces as props, and the simulation eng
 
 ---
 Revision 2024-05-16: Initial ExecPlan drafted to capture requirements for the interactive household finance simulator per user request.
+Revision 2025-02-14: Plan updated after implementation to record progress, surprises, decisions, and validation evidence.

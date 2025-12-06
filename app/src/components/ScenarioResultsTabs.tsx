@@ -1,0 +1,700 @@
+import { useMemo, useState } from 'react'
+import {
+  VictoryAxis,
+  VictoryBar,
+  VictoryChart,
+  VictoryLegend,
+  VictoryLine,
+  VictoryStack,
+  VictoryTooltip,
+  VictoryVoronoiContainer,
+  VictoryTheme,
+} from 'victory'
+import { useScenarioStore } from '@store/scenarioStore'
+import type { YearlyBreakdown } from '@models/scenario'
+
+const colors = ['#2563eb', '#16a34a', '#f97316', '#9333ea', '#0ea5e9', '#f43f5e']
+const INCOME_CATEGORY = { key: 'income', label: '収入', color: '#22c55e' as const }
+
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat('ja-JP', {
+    style: 'currency',
+    currency: 'JPY',
+    maximumFractionDigits: 0,
+  }).format(value)
+
+const formatAxisManYen = (value: number) =>
+  new Intl.NumberFormat('ja-JP', { maximumFractionDigits: 0 }).format(value / 10_000)
+
+const defaultChartPadding = { top: 40, bottom: 100, left: 90, right: 60 }
+const dependentAxisStyle = {
+  axisLabel: { padding: 40, fontSize: 12, fill: '#475569' },
+  tickLabels: { fontSize: 10, padding: 6 },
+}
+
+const expenseCategories = [
+  { key: 'living', label: '生活', color: '#2563eb' },
+  { key: 'education', label: '教育', color: '#f97316' },
+  { key: 'housing', label: '住宅', color: '#16a34a' },
+  { key: 'vehicle', label: '車', color: '#9333ea' },
+  { key: 'other', label: 'その他', color: '#0ea5e9' },
+  { key: 'savingsContribution', label: '貯蓄積立', color: '#f43f5e' },
+] as const
+
+type ExpenseKey = (typeof expenseCategories)[number]['key']
+
+type CashFlowSeriesEntry = {
+  x: number
+  y: number
+  category: ExpenseKey
+  categoryLabel: string
+  color: string
+}
+
+type CashExpenseSeriesEntry = CashFlowSeriesEntry & {
+  y: number
+}
+
+type IncomeSeriesEntry = {
+  x: number
+  y: number
+  categoryLabel: string
+  color: string
+}
+
+type WaterfallEntry = {
+  index: number
+  key: string
+  label: string
+  value: number
+  y: number
+  y0: number
+  color: string
+}
+
+const buildCashFlowSeries = (yearly: YearlyBreakdown[]): CashFlowSeriesEntry[] => {
+  return yearly.flatMap((entry) =>
+    expenseCategories.map((cat) => ({
+      x: entry.year,
+      y: entry.expenses[cat.key as ExpenseKey] ?? 0,
+      category: cat.key,
+      categoryLabel: cat.label,
+      color: cat.color,
+    })),
+  )
+}
+
+const buildIncomeSeries = (yearly: YearlyBreakdown[]): IncomeSeriesEntry[] =>
+  yearly.map((entry) => ({
+    x: entry.year,
+    y: entry.income,
+    categoryLabel: INCOME_CATEGORY.label,
+    color: INCOME_CATEGORY.color,
+  }))
+
+const buildWaterfallData = (yearly: YearlyBreakdown[]): WaterfallEntry[] => {
+  if (!yearly.length) {
+    return []
+  }
+  const totalIncome = yearly.reduce((sum, entry) => sum + entry.income, 0)
+  const totalsByCategory = expenseCategories.reduce<Record<ExpenseKey, number>>((acc, cat) => {
+    acc[cat.key] = 0
+    return acc
+  }, {} as Record<ExpenseKey, number>)
+
+  yearly.forEach((entry) => {
+    expenseCategories.forEach((cat) => {
+      totalsByCategory[cat.key] += entry.expenses[cat.key as ExpenseKey] ?? 0
+    })
+  })
+
+  const data: WaterfallEntry[] = []
+  let cumulative = 0
+  let index = 0
+  data.push({
+    index,
+    key: 'income',
+    label: '総収入',
+    value: totalIncome,
+    y: totalIncome,
+    y0: 0,
+    color: '#22c55e',
+  })
+  cumulative = totalIncome
+  index += 1
+
+  expenseCategories.forEach((cat) => {
+    const amount = totalsByCategory[cat.key]
+    if (!amount) {
+      return
+    }
+    const next = cumulative - amount
+    data.push({
+      index,
+      key: cat.key,
+      label: cat.label,
+      value: -amount,
+      y: Math.max(cumulative, next),
+      y0: Math.min(cumulative, next),
+      color: cat.color,
+    })
+    cumulative = next
+    index += 1
+  })
+
+  data.push({
+    index,
+    key: 'net',
+    label: '最終差額',
+    value: cumulative,
+    y: Math.max(0, cumulative),
+    y0: Math.min(0, cumulative),
+    color: cumulative >= 0 ? '#0f172a' : '#ef4444',
+  })
+  return data
+}
+
+export const ScenarioResultsTabs = () => {
+  const projections = useScenarioStore((state) => state.projections)
+  const comparison = useScenarioStore((state) => state.comparison)
+  const SPECIAL_TABS = {
+    overview: 'overview',
+    comparison: 'comparison',
+  } as const
+
+  const [activeTab, setActiveTab] = useState<string>(() => projections[0]?.scenarioId ?? SPECIAL_TABS.overview)
+
+  const chartData = useMemo(
+    () =>
+      projections.map((projection, index) => {
+        const netWorthSeries = projection.yearly.map((entry) => ({ x: entry.year, y: entry.netWorth }))
+        const netCashSeries = projection.yearly.map((entry) => ({ x: entry.year, y: entry.netCashFlow }))
+        const incomeSeries = buildIncomeSeries(projection.yearly)
+        const expenseSeries = buildCashFlowSeries(projection.yearly)
+        const expenseSeriesNegative = expenseSeries.map((entry) => ({
+          ...entry,
+          y: -entry.y,
+        }))
+        return {
+          id: projection.scenarioId,
+          label: projection.scenarioName,
+          color: colors[index % colors.length],
+          netWorth: netWorthSeries,
+          netCashFlow: netCashSeries,
+          cashIncomeSeries: incomeSeries,
+        cashFlowSeries: expenseSeries,
+        cashExpenseSeries: expenseSeriesNegative,
+          waterfallData: buildWaterfallData(projection.yearly),
+          summary: projection.summary,
+        }
+      }),
+    [projections],
+  )
+
+  const resolvedTab =
+    activeTab === SPECIAL_TABS.comparison ||
+    activeTab === SPECIAL_TABS.overview ||
+    chartData.some((scenario) => scenario.id === activeTab)
+      ? activeTab
+      : chartData[0]?.id ?? SPECIAL_TABS.overview
+
+  if (!chartData.length) {
+    return (
+      <section className="panel results-panel">
+        <p>シナリオを追加してシミュレーションを開始してください。</p>
+      </section>
+    )
+  }
+
+  const activeScenario =
+    chartData.find((scenario) => scenario.id === resolvedTab) ?? chartData[0]
+
+  return (
+    <section className="panel results-panel">
+      <div className="tab-nav" role="tablist" aria-label="シミュレーション結果">
+        {chartData.map((scenario) => (
+          <button
+            key={scenario.id}
+            type="button"
+            role="tab"
+            aria-selected={resolvedTab === scenario.id}
+            className={['tab-nav__btn', resolvedTab === scenario.id ? 'is-active' : ''].join(' ').trim()}
+            onClick={() => setActiveTab(scenario.id)}
+          >
+            {scenario.label}
+          </button>
+        ))}
+        <button
+          type="button"
+          role="tab"
+          aria-selected={resolvedTab === SPECIAL_TABS.overview}
+          className={['tab-nav__btn', resolvedTab === SPECIAL_TABS.overview ? 'is-active' : ''].join(' ').trim()}
+          onClick={() => setActiveTab(SPECIAL_TABS.overview)}
+        >
+          全体グラフ
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={resolvedTab === SPECIAL_TABS.comparison}
+          className={['tab-nav__btn', resolvedTab === SPECIAL_TABS.comparison ? 'is-active' : ''].join(' ').trim()}
+          onClick={() => setActiveTab(SPECIAL_TABS.comparison)}
+        >
+          比較サマリー
+        </button>
+      </div>
+      <div className="tab-panel results-panel__content">
+        {resolvedTab === SPECIAL_TABS.comparison ? (
+          <ComparisonSummary />
+        ) : resolvedTab === SPECIAL_TABS.overview ? (
+          <CombinedCharts scenarios={chartData} />
+        ) : (
+          <ScenarioCharts key={activeScenario.id} scenario={activeScenario} color={activeScenario.color} />
+        )}
+      </div>
+      {comparison?.earliestNegativeYear ? (
+        <p className="warning results-panel__warning">
+          最速で赤字になるのは{' '}
+          <strong>
+            {
+              chartData.find((scenario) => scenario.id === comparison.earliestNegativeYear?.scenarioId)
+                ?.label
+            }
+          </strong>
+          （{comparison.earliestNegativeYear.year} 年）
+        </p>
+      ) : (
+        <p className="results-panel__warning">どのシナリオも赤字は発生しません。</p>
+      )}
+    </section>
+  )
+}
+
+interface ScenarioChartsProps {
+  scenario: {
+    id: string
+    label: string
+    netWorth: { x: number; y: number }[]
+    netCashFlow: { x: number; y: number }[]
+    cashIncomeSeries: IncomeSeriesEntry[]
+    cashExpenseSeries: CashExpenseSeriesEntry[]
+    cashFlowSeries: CashFlowSeriesEntry[]
+    waterfallData: WaterfallEntry[]
+    summary: {
+      totalIncome: number
+      totalExpenses: number
+      finalNetWorth: number
+      peakNetWorth: number
+      firstNegativeYear: number | null
+    }
+  }
+  color: string
+}
+
+const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
+  const [view, setView] = useState<'netWorth' | 'cashFlow' | 'waterfall'>('netWorth')
+
+  return (
+    <div className="scenario-results">
+      <div className="sub-tab-nav" role="tablist" aria-label="グラフ切り替え">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === 'netWorth'}
+          className={['sub-tab-nav__btn', view === 'netWorth' ? 'is-active' : ''].join(' ')}
+          onClick={() => setView('netWorth')}
+        >
+          純資産推移
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === 'cashFlow'}
+          className={['sub-tab-nav__btn', view === 'cashFlow' ? 'is-active' : ''].join(' ')}
+          onClick={() => setView('cashFlow')}
+        >
+          キャッシュフロー
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === 'waterfall'}
+          className={['sub-tab-nav__btn', view === 'waterfall' ? 'is-active' : ''].join(' ')}
+          onClick={() => setView('waterfall')}
+        >
+          ウォーターフロー
+        </button>
+      </div>
+
+      {view === 'netWorth' && (
+        <div className="chart-block">
+          <div className="chart-block__header">
+            <h3>{scenario.label} - 純資産推移</h3>
+            <span>最終: {formatCurrency(scenario.summary.finalNetWorth)}</span>
+          </div>
+          <VictoryChart theme={VictoryTheme.material} height={320} width={640} padding={defaultChartPadding}>
+            <VictoryLegend
+              x={80}
+              y={0}
+              orientation="horizontal"
+              gutter={16}
+              data={[
+                {
+                  name: scenario.label,
+                  symbol: { fill: color },
+                },
+              ]}
+            />
+            <VictoryAxis tickFormat={(tick) => `${tick}`} />
+            <VictoryAxis
+              dependentAxis
+              tickFormat={formatAxisManYen}
+              label="万円"
+              style={dependentAxisStyle}
+            />
+            <VictoryLine
+              data={scenario.netWorth}
+              style={{
+                data: {
+                  stroke: color,
+                  strokeWidth: 3,
+                },
+              }}
+            />
+          </VictoryChart>
+        </div>
+      )}
+
+      {view === 'cashFlow' && (
+        <div className="chart-block">
+          <div className="chart-block__header">
+            <h3>{scenario.label} - キャッシュフロー</h3>
+            <span>総収入 {formatCurrency(scenario.summary.totalIncome)}</span>
+          </div>
+          <>
+            <VictoryChart
+              theme={VictoryTheme.material}
+              height={340}
+              width={640}
+              padding={defaultChartPadding}
+              containerComponent={
+                <VictoryVoronoiContainer
+                  labels={({ datum }) => `${datum.categoryLabel} ${formatCurrency(datum.y)}\n年: ${datum.x}`}
+                  labelComponent={
+                    <VictoryTooltip
+                      cornerRadius={4}
+                      flyoutPadding={{ top: 8, bottom: 8, left: 10, right: 10 }}
+                    />
+                  }
+                />
+              }
+            >
+              <VictoryAxis tickFormat={(tick) => `${tick}`} />
+              <VictoryAxis
+                dependentAxis
+                tickFormat={formatAxisManYen}
+                label="万円"
+                style={dependentAxisStyle}
+              />
+              <VictoryBar data={scenario.cashIncomeSeries} style={{ data: { fill: INCOME_CATEGORY.color, opacity: 0.9 } }} />
+              <VictoryStack>
+                {expenseCategories.map((cat) => (
+                  <VictoryBar
+                    key={cat.key}
+                    data={scenario.cashFlowSeries
+                      .filter((entry: CashFlowSeriesEntry) => entry.category === cat.key)
+                      .map((entry) => ({ ...entry, y: -entry.y }))}
+                    style={{ data: { fill: cat.color } }}
+                  />
+                ))}
+              </VictoryStack>
+            </VictoryChart>
+            <div className="chart-legend">
+              <div className="chart-legend__item">
+                <span className="chart-legend__swatch" style={{ backgroundColor: INCOME_CATEGORY.color }} />
+                {INCOME_CATEGORY.label}
+              </div>
+              {expenseCategories.map((cat) => (
+                <div key={cat.key} className="chart-legend__item">
+                  <span className="chart-legend__swatch" style={{ backgroundColor: cat.color }} />
+                  {cat.label}
+                </div>
+              ))}
+            </div>
+          </>
+        </div>
+      )}
+
+      {view === 'waterfall' && (
+        <div className="chart-block">
+          <div className="chart-block__header">
+            <h3>{scenario.label} - ウォーターフロー</h3>
+            <span>最終差額 {formatCurrency(scenario.summary.finalNetWorth)}</span>
+          </div>
+          <WaterfallChart data={scenario.waterfallData} />
+        </div>
+      )}
+
+      <ul className="scenario-results__summary">
+        <li>
+          総収入 <strong>{formatCurrency(scenario.summary.totalIncome)}</strong>
+        </li>
+        <li>
+          総支出 <strong>{formatCurrency(scenario.summary.totalExpenses)}</strong>
+        </li>
+        <li>
+          ピーク純資産 <strong>{formatCurrency(scenario.summary.peakNetWorth)}</strong>
+        </li>
+        <li>
+          {scenario.summary.firstNegativeYear
+            ? `${scenario.summary.firstNegativeYear} 年に赤字へ転落`
+            : '赤字なし'}
+        </li>
+      </ul>
+    </div>
+  )
+}
+
+const WaterfallChart = ({ data }: { data: WaterfallEntry[] }) => {
+  if (!data.length) {
+    return <p>ウォーターフローのデータが不足しています。</p>
+  }
+  const width = 640
+  const height = 340
+  const paddingX = 60
+  const paddingY = 30
+  const chartWidth = width - paddingX * 2
+  const chartHeight = height - paddingY * 2
+  const yMax = Math.max(...data.map((entry) => Math.max(entry.y, entry.y0)))
+  const yMin = Math.min(...data.map((entry) => Math.min(entry.y, entry.y0)))
+  const range = yMax - yMin || 1
+  const scaleY = (value: number) => paddingY + chartHeight - ((value - yMin) / range) * chartHeight
+  const slotWidth = chartWidth / data.length
+  const barWidth = Math.max(20, slotWidth - 20)
+  const zeroY = scaleY(0)
+
+  return (
+    <div className="waterfall-chart">
+      <svg width={width} height={height} role="img" aria-label="ウォーターフロー">
+        <line x1={paddingX - 10} x2={width - paddingX + 10} y1={zeroY} y2={zeroY} stroke="#cbd5f5" strokeWidth={1} />
+        {data.map((entry, idx) => {
+          const startY = scaleY(entry.y)
+          const endY = scaleY(entry.y0)
+          const barHeight = Math.abs(endY - startY)
+          const y = Math.min(startY, endY)
+          const x = paddingX + idx * slotWidth + (slotWidth - barWidth) / 2
+          return (
+            <g key={entry.key}>
+              <rect x={x} y={y} width={barWidth} height={Math.max(barHeight, 2)} fill={entry.color} rx={4} />
+              <text
+                x={x + barWidth / 2}
+                y={y - 6}
+                textAnchor="middle"
+                fontSize={12}
+                fill="#0f172a"
+              >
+                {formatCurrency(entry.value)}
+              </text>
+              <text
+                x={x + barWidth / 2}
+                y={height - 8}
+                textAnchor="middle"
+                fontSize={12}
+                fill="#475569"
+                transform={`rotate(-30 ${x + barWidth / 2},${height - 8})`}
+              >
+                {entry.label}
+              </text>
+            </g>
+          )
+        })}
+      </svg>
+    </div>
+  )
+}
+
+const CombinedCharts = ({
+  scenarios,
+}: {
+  scenarios: Array<{
+    id: string
+    label: string
+    netWorth: { x: number; y: number }[]
+    netCashFlow: { x: number; y: number }[]
+    cashIncomeSeries: IncomeSeriesEntry[]
+    cashExpenseSeries: CashExpenseSeriesEntry[]
+    cashFlowSeries: CashFlowSeriesEntry[]
+    color: string
+  }>
+}) => {
+  const [view, setView] = useState<'netWorth' | 'cashFlow'>('netWorth')
+  return (
+    <div className="scenario-results">
+      <div className="sub-tab-nav" role="tablist" aria-label="全体グラフ切り替え">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === 'netWorth'}
+          className={['sub-tab-nav__btn', view === 'netWorth' ? 'is-active' : ''].join(' ')}
+          onClick={() => setView('netWorth')}
+        >
+          純資産推移
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === 'cashFlow'}
+          className={['sub-tab-nav__btn', view === 'cashFlow' ? 'is-active' : ''].join(' ')}
+          onClick={() => setView('cashFlow')}
+        >
+          キャッシュフロー
+        </button>
+      </div>
+      {view === 'netWorth' ? (
+        <div className="chart-block">
+          <div className="chart-block__header">
+            <h3>全シナリオ純資産比較</h3>
+          </div>
+          <VictoryChart theme={VictoryTheme.material} height={320} width={640} padding={defaultChartPadding}>
+            <VictoryLegend
+              x={60}
+              y={0}
+              orientation="horizontal"
+              gutter={16}
+              data={scenarios.map((scenario) => ({
+                name: scenario.label,
+                symbol: { fill: scenario.color },
+              }))}
+            />
+            <VictoryAxis tickFormat={(tick) => `${tick}`} />
+            <VictoryAxis
+              dependentAxis
+              tickFormat={formatAxisManYen}
+              label="万円"
+              style={dependentAxisStyle}
+            />
+            {scenarios.map((scenario) => (
+              <VictoryLine
+                key={scenario.id}
+                data={scenario.netWorth}
+                style={{ data: { stroke: scenario.color, strokeWidth: 2 } }}
+              />
+            ))}
+          </VictoryChart>
+        </div>
+      ) : (
+        <div className="chart-block">
+          <div className="chart-block__header">
+            <h3>全シナリオキャッシュフロー比較</h3>
+          </div>
+          <VictoryChart
+            theme={VictoryTheme.material}
+            height={340}
+            width={640}
+            padding={defaultChartPadding}
+            containerComponent={
+              <VictoryVoronoiContainer
+                labels={({ datum }) =>
+                  `${datum.scenarioLabel ?? ''} ${datum.categoryLabel} ${formatCurrency(datum.y)}\n年: ${datum.x}`
+                }
+                labelComponent={<VictoryTooltip cornerRadius={4} flyoutPadding={8} />}
+              />
+            }
+          >
+            <VictoryAxis tickFormat={(tick) => `${tick}`} />
+            <VictoryAxis
+              dependentAxis
+              tickFormat={formatAxisManYen}
+              label="万円"
+              style={dependentAxisStyle}
+            />
+            {scenarios.map((scenario, index) => {
+              const offset = (index - (scenarios.length - 1) / 2) * 0.3
+              return (
+                <g key={scenario.id}>
+                  <VictoryBar
+                    data={scenario.cashIncomeSeries.map((entry) => ({
+                      ...entry,
+                      x: entry.x + offset,
+                      scenarioLabel: scenario.label,
+                    }))}
+                    style={{ data: { fill: INCOME_CATEGORY.color, opacity: 0.85 } }}
+                  />
+                  <VictoryStack>
+                    {expenseCategories.map((cat) => (
+                      <VictoryBar
+                        key={cat.key}
+                        data={scenario.cashExpenseSeries
+                          .filter((entry: CashExpenseSeriesEntry) => entry.category === cat.key)
+                          .map((entry: CashExpenseSeriesEntry) => ({
+                            ...entry,
+                            x: entry.x + offset,
+                            scenarioLabel: scenario.label,
+                          }))}
+                        style={{ data: { fill: cat.color, opacity: 0.8 } }}
+                      />
+                    ))}
+                  </VictoryStack>
+                </g>
+              )
+            })}
+          </VictoryChart>
+          <div className="chart-legend">
+            <div className="chart-legend__item">
+              <span className="chart-legend__swatch" style={{ backgroundColor: INCOME_CATEGORY.color }} />
+              {INCOME_CATEGORY.label}
+            </div>
+            {expenseCategories.map((cat) => (
+              <div key={cat.key} className="chart-legend__item">
+                <span className="chart-legend__swatch" style={{ backgroundColor: cat.color }} />
+                {cat.label}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+const ComparisonSummary = () => {
+  const comparison = useScenarioStore((state) => state.comparison)
+
+  if (!comparison) {
+    return <p>比較できるシナリオがありません。</p>
+  }
+
+  return (
+    <div className="comparison-summary">
+      <h3>比較サマリー</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>シナリオ</th>
+            <th>総収入</th>
+            <th>総支出</th>
+            <th>最終純資産</th>
+            <th>赤字開始年</th>
+          </tr>
+        </thead>
+        <tbody>
+          {comparison.projections.map((projection, index) => (
+            <tr key={projection.scenarioId}>
+              <td>
+                <span
+                  className="comparison-summary__color"
+                  style={{ backgroundColor: colors[index % colors.length] }}
+                />
+                {projection.scenarioName}
+              </td>
+              <td>{formatCurrency(projection.summary.totalIncome)}</td>
+              <td>{formatCurrency(projection.summary.totalExpenses)}</td>
+              <td>{formatCurrency(projection.summary.finalNetWorth)}</td>
+              <td>{projection.summary.firstNegativeYear ?? 'なし'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}

@@ -1,0 +1,201 @@
+[
+  {
+    "id": "sample-baseline",
+    "name": "標準プラン",
+    "description": "現状維持を前提としたプラン",
+    "startYear": 2025,
+    "initialCash": 800000,
+    "currency": "JPY",
+    "residents": [
+      {
+        "id": "resident-a",
+        "name": "佐藤 太郎",
+        "currentAge": 38,
+        "retirementAge": 65,
+        "baseNetIncome": 6200000,
+        "annualIncomeGrowthRate": 0.025,
+        "incomeEvents": [
+          {
+            "id": "event-raise",
+            "label": "昇進ボーナス",
+            "amount": 350000,
+            "triggerAge": 42,
+            "type": "bonus"
+          },
+          {
+            "id": "event-retire",
+            "label": "退職金",
+            "amount": 12000000,
+            "triggerAge": 65,
+            "type": "retirement"
+          }
+        ],
+        "expenseBands": [
+          {
+            "id": "expense-elementary",
+            "label": "小学生",
+            "startAge": 42,
+            "endAge": 47,
+            "annualAmount": 480000,
+            "category": "education"
+          },
+          {
+            "id": "expense-graduate",
+            "label": "大学院",
+            "startAge": 57,
+            "endAge": 60,
+            "annualAmount": 900000,
+            "category": "education"
+          }
+        ]
+      }
+    ],
+    "housing": {
+      "builtYear": 2012,
+      "mortgageRemaining": 18000000,
+      "monthlyMortgage": 95000,
+      "managementFeeMonthly": 13000,
+      "maintenanceReserveMonthly": 11000,
+      "extraAnnualCosts": 150000
+    },
+    "vehicles": [
+      {
+        "id": "vehicle-a",
+        "label": "ファミリーカー",
+        "purchasePrice": 3200000,
+        "loanRemaining": 1800000,
+        "monthlyLoan": 52000,
+        "inspectionCycleYears": 2,
+        "inspectionCost": 130000,
+        "maintenanceAnnual": 90000,
+        "parkingMonthly": 14000,
+        "insuranceAnnual": 95000
+      }
+    ],
+    "living": {
+      "baseAnnual": 2800000,
+      "insuranceAnnual": 420000,
+      "utilitiesAnnual": 420000,
+      "discretionaryAnnual": 300000,
+      "healthcareAnnual": 160000,
+      "inflationRate": 0.012
+    },
+    "savingsAccounts": [
+      {
+        "id": "savings-cash",
+        "label": "普通預金",
+        "type": "deposit",
+        "balance": 2500000,
+        "annualContribution": 500000,
+        "annualInterestRate": 0.01,
+        "adjustable": true
+      },
+      {
+        "id": "savings-invest",
+        "label": "積立NISA",
+        "type": "investment",
+        "balance": 1500000,
+        "annualContribution": 400000,
+        "annualInterestRate": 0.05,
+        "adjustable": true,
+        "withdrawPriority": 2
+      }
+    ],
+    "expenseBands": [
+      {
+        "id": "lesson-base",
+        "label": "習い事",
+        "startAge": 0,
+        "endAge": 5,
+        "annualAmount": 280000,
+        "category": "lessons"
+      }
+    ],
+    "customIncomeEvents": []
+  },
+  {
+    "id": "sample-education",
+    "name": "教育費増額プラン",
+    "description": "習い事・大学費用を増額したプラン",
+    "startYear": 2025,
+    "initialCash": 900000,
+    "currency": "JPY",
+    "residents": [
+      {
+        "id": "resident-b",
+        "name": "佐藤 花子",
+        "currentAge": 36,
+        "retirementAge": 63,
+        "baseNetIncome": 5000000,
+        "annualIncomeGrowthRate": 0.02,
+        "incomeEvents": [
+          {
+            "id": "event-mat-leave",
+            "label": "育休による減収",
+            "amount": -600000,
+            "triggerAge": 37,
+            "durationYears": 1,
+            "type": "reduction"
+          }
+        ],
+        "expenseBands": [
+          {
+            "id": "expense-lessons",
+            "label": "習い事強化",
+            "startAge": 40,
+            "endAge": 47,
+            "annualAmount": 600000,
+            "category": "lessons"
+          },
+          {
+            "id": "expense-abroad",
+            "label": "海外留学",
+            "startAge": 58,
+            "endAge": 59,
+            "annualAmount": 1600000,
+            "category": "education"
+          }
+        ]
+      }
+    ],
+    "housing": {
+      "builtYear": 2018,
+      "mortgageRemaining": 21000000,
+      "monthlyMortgage": 110000,
+      "managementFeeMonthly": 15000,
+      "maintenanceReserveMonthly": 12000,
+      "extraAnnualCosts": 250000
+    },
+    "vehicles": [],
+    "living": {
+      "baseAnnual": 3200000,
+      "insuranceAnnual": 450000,
+      "utilitiesAnnual": 460000,
+      "discretionaryAnnual": 420000,
+      "healthcareAnnual": 180000,
+      "inflationRate": 0.015
+    },
+    "savingsAccounts": [
+      {
+        "id": "savings2",
+        "label": "共働き貯蓄",
+        "type": "deposit",
+        "balance": 2000000,
+        "annualContribution": 700000,
+        "annualInterestRate": 0.008,
+        "adjustable": true
+      }
+    ],
+    "expenseBands": [
+      {
+        "id": "lessons-plus",
+        "label": "習い事追加",
+        "startAge": 0,
+        "endAge": 7,
+        "annualAmount": 500000,
+        "category": "lessons"
+      }
+    ],
+    "customIncomeEvents": []
+  }
+]
