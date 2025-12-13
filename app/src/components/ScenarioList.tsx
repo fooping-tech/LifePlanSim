@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { useScenarioStore } from '@store/scenarioStore'
 import { useShallow } from 'zustand/react/shallow'
 import { downloadScenarioSet, readScenarioFile } from '@utils/persistence'
-import { IconDownload, IconFileJson, IconUpload } from '@components/icons'
+import { IconDownload, IconFileJson, IconLink, IconUpload } from '@components/icons'
 
 export const ScenarioList = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -193,10 +193,21 @@ export const ScenarioList = () => {
                 <span className="scenario-file-actions__btn-help">既存を消して置き換えます</span>
               </button>
             </div>
+            <div className="scenario-file-actions__group">
+              <p className="scenario-file-actions__title">
+                <IconLink title="共有" /> 共有
+              </p>
+              <button type="button" className="scenario-file-actions__btn" onClick={handleShare}>
+                <span className="scenario-file-actions__btn-label">
+                  <IconLink title="共有リンク" />
+                  共有リンクをコピー
+                </span>
+                <span className="scenario-file-actions__btn-help">
+                  長すぎる場合はJSON書き出しをご利用ください
+                </span>
+              </button>
+            </div>
           </div>
-          <button type="button" onClick={handleShare}>
-            共有リンク
-          </button>
           <input
             ref={fileInputRef}
             type="file"

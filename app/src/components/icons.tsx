@@ -115,3 +115,10 @@ export const IconFileJson = (props: IconProps) => (
     <path d="M15.5 16.5c0 .8-.7 1.5-1.5 1.5" />
   </SvgIcon>
 )
+
+export const IconLink = (props: IconProps) => (
+  <SvgIcon {...props}>
+    <path d="M10 13a5 5 0 0 1 0-7l1-1a5 5 0 0 1 7 7l-1 1" />
+    <path d="M14 11a5 5 0 0 1 0 7l-1 1a5 5 0 0 1-7-7l1-1" />
+  </SvgIcon>
+)
