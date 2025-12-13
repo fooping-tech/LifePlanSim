@@ -141,6 +141,21 @@ Milestone 4 (Validation & UX refinements) adds guardrails: highlight years where
     - Keep “全シナリオ一覧のJSON書き出し”: current `downloadScenarioSet(scenarios)` remains, but ensure the UI label clarifies “全件”.
     - Keep “全シナリオ一覧のJSON読み込み（置換）”: current load flow replaces scenarios; make this explicit in UI and optionally add a confirmation dialog.
     - Validation rules: accept both `Scenario[]` and legacy `{scenarios: Scenario[]}`; normalize defaults via `ensureScenarioDefaults` after import; handle malformed files with a user-friendly error.
+25. Make JSON import/export UI clearer (icons + grouping):
+    - Replace the four flat buttons with a small “ファイル” or “JSON” action group that is readable at a glance (e.g., 2-column grid or split-menu).
+    - Group by intent with clear labels and icons (inline SVG; no new deps):
+      - 書き出し（⬇︎ icon）
+        - 全件を書き出し
+        - 選択中のみを書き出し
+      - 読み込み（⬆︎ icon）
+        - 追加で読み込み（追記）
+        - 置換で読み込み（全件置換・確認ダイアログ）
+    - Add short helper text under each action (1 line) to reduce mistakes (e.g., “既存は残す / 既存を消して置き換える”).
+    - Keep keyboard accessibility: buttons are real `<button>`, menu (if used) supports focus/ESC, and the hidden `<input type="file">` is triggered from the chosen action.
+    - Improve feedback UX:
+      - Show which mode was executed in the status line (“書き出し: 全件 / 読み込み: 追加”).
+      - On import errors, show a friendly message + expected formats (`Scenario[]` / `{scenarios: []}`).
+    - Acceptance: users can correctly choose “追加/置換” without reading docs; visually distinct icons and labels prevent accidental replacement.
 
 ## Validation and Acceptance
 

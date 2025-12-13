@@ -89,3 +89,29 @@ export const IconChart = (props: IconProps) => (
   </SvgIcon>
 )
 
+export const IconDownload = (props: IconProps) => (
+  <SvgIcon {...props}>
+    <path d="M12 3v10" />
+    <path d="M8 10l4 4 4-4" />
+    <path d="M4 17v3h16v-3" />
+  </SvgIcon>
+)
+
+export const IconUpload = (props: IconProps) => (
+  <SvgIcon {...props}>
+    <path d="M12 21V11" />
+    <path d="M8 14l4-4 4 4" />
+    <path d="M4 7V4h16v3" />
+  </SvgIcon>
+)
+
+export const IconFileJson = (props: IconProps) => (
+  <SvgIcon {...props}>
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+    <path d="M14 3v5h5" />
+    <path d="M8.5 12.5c0-.8.7-1.5 1.5-1.5" />
+    <path d="M8.5 16.5c0 .8.7 1.5 1.5 1.5" />
+    <path d="M15.5 12.5c0-.8-.7-1.5-1.5-1.5" />
+    <path d="M15.5 16.5c0 .8-.7 1.5-1.5 1.5" />
+  </SvgIcon>
+)

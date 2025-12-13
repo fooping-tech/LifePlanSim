@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { useScenarioStore } from '@store/scenarioStore'
 import { useShallow } from 'zustand/react/shallow'
 import { downloadScenarioSet, readScenarioFile } from '@utils/persistence'
+import { IconDownload, IconFileJson, IconUpload } from '@components/icons'
 
 export const ScenarioList = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -56,13 +57,18 @@ export const ScenarioList = () => {
           return
         }
         loadScenarios(data)
-        setStatus('JSONを読み込みました（置換）')
+        setStatus('読み込み: 置換しました')
       } else {
         appendScenarios(data)
-        setStatus('JSONを読み込みました（追加）')
+        setStatus('読み込み: 追加しました')
       }
     } catch (error) {
-      setStatus(`読込エラー: ${(error as Error).message}`)
+      const message = (error as Error).message
+      if (message === 'Invalid scenario JSON format') {
+        setStatus('読込エラー: JSON形式が不正です（Scenario[] または {scenarios: Scenario[]}）')
+      } else {
+        setStatus(`読込エラー: ${message}`)
+      }
     } finally {
       event.target.value = ''
     }
@@ -129,29 +135,65 @@ export const ScenarioList = () => {
           ))}
         </ul>
         <div className="scenario-list__footer">
-          <button type="button" onClick={() => downloadScenarioSet(scenarios, 'life-plan-scenarios.json')}>
-            JSON書き出し(全件)
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              const active = scenarios.find((scenario) => scenario.id === activeScenarioId)
-              if (!active) {
-                setStatus('書き出し対象のシナリオが見つかりません')
-                return
-              }
-              downloadScenarioSet([active], buildScenarioFileName(active.name))
-              setStatus('JSONを書き出しました（選択中）')
-            }}
-          >
-            JSON書き出し(選択中)
-          </button>
-          <button type="button" onClick={() => handleImportClick('append')}>
-            JSON読込(追加)
-          </button>
-          <button type="button" onClick={() => handleImportClick('replace')}>
-            JSON読込(置換)
-          </button>
+          <div className="scenario-file-actions" aria-label="JSONの書き出しと読み込み">
+            <div className="scenario-file-actions__group">
+              <p className="scenario-file-actions__title">
+                <IconDownload title="書き出し" /> 書き出し
+              </p>
+              <button
+                type="button"
+                className="scenario-file-actions__btn"
+                onClick={() => {
+                  downloadScenarioSet(scenarios, 'life-plan-scenarios.json')
+                  setStatus('書き出し: 全件')
+                }}
+              >
+                <span className="scenario-file-actions__btn-label">
+                  <IconFileJson title="JSON" />
+                  全件を書き出し
+                </span>
+                <span className="scenario-file-actions__btn-help">すべてのシナリオを保存します</span>
+              </button>
+              <button
+                type="button"
+                className="scenario-file-actions__btn"
+                onClick={() => {
+                  const active = scenarios.find((scenario) => scenario.id === activeScenarioId)
+                  if (!active) {
+                    setStatus('書き出し: 対象のシナリオが見つかりません')
+                    return
+                  }
+                  downloadScenarioSet([active], buildScenarioFileName(active.name))
+                  setStatus('書き出し: 選択中のみ')
+                }}
+              >
+                <span className="scenario-file-actions__btn-label">
+                  <IconFileJson title="JSON" />
+                  選択中のみを書き出し
+                </span>
+                <span className="scenario-file-actions__btn-help">今見ているシナリオだけ保存します</span>
+              </button>
+            </div>
+            <div className="scenario-file-actions__group">
+              <p className="scenario-file-actions__title">
+                <IconUpload title="読み込み" /> 読み込み
+              </p>
+              <button type="button" className="scenario-file-actions__btn" onClick={() => handleImportClick('append')}>
+                <span className="scenario-file-actions__btn-label">
+                  <IconFileJson title="JSON" />
+                  追加で読み込み
+                </span>
+                <span className="scenario-file-actions__btn-help">既存は残して追加します</span>
+              </button>
+              <button type="button" className="scenario-file-actions__btn" onClick={() => handleImportClick('replace')}>
+                <span className="scenario-file-actions__btn-label">
+                  <IconFileJson title="JSON" />
+                  置換で読み込み
+                </span>
+                <span className="scenario-file-actions__btn-help">既存を消して置き換えます</span>
+              </button>
+            </div>
+          </div>
           <button type="button" onClick={handleShare}>
             共有リンク
           </button>
