@@ -6,19 +6,24 @@ type RemoteBuildInfo = {
   builtAt?: string
 }
 
-const shortSha = (value: string | null | undefined) => {
+const formatBuildId = (value: string | null | undefined) => {
   if (!value) {
     return ''
   }
-  const maybeSha = value.split('-').at(-1) ?? value
-  return maybeSha.slice(0, 7)
+  const parts = value.split('-')
+  const [maybeRun, ...rest] = parts
+  if (maybeRun && /^\d+$/.test(maybeRun) && rest.length) {
+    const sha = rest.join('-')
+    return `${maybeRun}-${sha.slice(0, 7)}`
+  }
+  return value.slice(0, 7)
 }
 
 const buildLabel = (version: string, buildId: string | null) => {
   if (!buildId) {
     return `v${version}`
   }
-  return `v${version}+${shortSha(buildId)}`
+  return `v${version}+${formatBuildId(buildId)}`
 }
 
 export const useBuildInfo = () => {
