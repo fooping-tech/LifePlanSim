@@ -122,6 +122,10 @@ Milestone 4 (Validation & UX refinements) adds guardrails: highlight years where
     - Update the ScenarioForm “生活費” section to manage multiple periods (add/remove/duplicate), with compact summaries showing which years each plan applies; keep monthly entry UX.
     - Extend living presets to optionally insert a multi-period template (e.g., “育児期→通常期”) as well as single-period presets.
     - Migration: on load, auto-convert legacy `living` into a single `livingPlans[0]` entry spanning the full horizon so existing saved data continues to work without user intervention.
+22. Enable GitHub Pages deployment (static hosting) for the Vite app:
+    - Add a GitHub Actions workflow that builds the app from `app/` and deploys `app/dist` to Pages using `actions/upload-pages-artifact` + `actions/deploy-pages`.
+    - Configure Vite `base` for Pages (repository subpath) so assets resolve correctly at `https://<user>.github.io/<repo>/` (use an env-driven base such as `process.env.VITE_BASE` or derive from `GITHUB_REPOSITORY` during CI).
+    - Document deployment prerequisites: Pages source “GitHub Actions”, default branch build, and (optionally) custom domain notes in the root `README.md`.
 
 ## Validation and Acceptance
 

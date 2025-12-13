@@ -40,7 +40,44 @@
       "dependents": 0,
       "incomeEvents": [
         { "label": "昇給", "type": "raise", "amount": 400000, "triggerAge": 38 },
-        { "label": "育休", "type": "reduction", "amount": -800000, "triggerAge": 35, "durationYears": 1 }
+        { "label": "育休", "type": "reduction", "amount": -800000, "triggerAge": 35, "durationYears": 1 },
+        { "label": "退職金", "type": "bonus", "amount": 12000000, "triggerAge": 60 }
+      ],
+      "expenseBands": []
+    }
+  },
+  {
+    "id": "husband-part-time",
+    "title": "夫（パートタイム）",
+    "description": "パートタイム/時短勤務を想定した夫テンプレート。扶養（子ども）は別途子どもプリセットで追加してください。",
+    "resident": {
+      "name": "夫（パート）",
+      "currentAge": 34,
+      "retirementAge": 65,
+      "baseNetIncome": 2800000,
+      "annualIncomeGrowthRate": 0.01,
+      "dependents": 0,
+      "incomeEvents": [
+        { "label": "昇給", "type": "raise", "amount": 200000, "triggerAge": 40 },
+        { "label": "退職金", "type": "bonus", "amount": 5000000, "triggerAge": 60 }
+      ],
+      "expenseBands": []
+    }
+  },
+  {
+    "id": "wife-part-time",
+    "title": "妻（パートタイム）",
+    "description": "パートタイム/時短勤務を想定した妻テンプレート。扶養（子ども）は別途子どもプリセットで追加してください。",
+    "resident": {
+      "name": "妻（パート）",
+      "currentAge": 33,
+      "retirementAge": 65,
+      "baseNetIncome": 2400000,
+      "annualIncomeGrowthRate": 0.01,
+      "dependents": 0,
+      "incomeEvents": [
+        { "label": "昇給", "type": "raise", "amount": 150000, "triggerAge": 40 },
+        { "label": "退職金", "type": "bonus", "amount": 4000000, "triggerAge": 60 }
       ],
       "expenseBands": []
     }

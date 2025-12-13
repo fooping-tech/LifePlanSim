@@ -35,6 +35,14 @@ npm run preview
 
 - ユーザーガイド: `docs/USER_GUIDE.md`
 
+## GitHub Pages で公開
+
+このプロジェクトはフロントエンド（`app/`）を GitHub Pages へデプロイできます（GitHub Actions）。
+
+- ワークフロー: `.github/workflows/deploy-pages.yml`
+- Pages の設定: GitHub リポジトリの Settings → Pages → Source を「GitHub Actions」に設定
+- 公開 URL: `https://<user>.github.io/<repo>/`
+
 ## 開発用コマンド（app）
 
 ```bash
@@ -42,4 +50,3 @@ cd app
 npm run lint
 npm test
 ```
-
