@@ -1,4 +1,5 @@
 import type { Scenario } from '@models/scenario'
+import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string'
 
 const STORAGE_KEY = 'life-plan-sim/scenarios'
 
@@ -76,10 +77,7 @@ export const readScenarioFile = (file: File): Promise<Scenario[]> => {
 
 export const encodeSnapshot = (scenarios: Scenario[]): string => {
   const text = JSON.stringify(scenarios)
-  if (typeof window !== 'undefined' && typeof window.btoa === 'function') {
-    return window.btoa(encodeURIComponent(text))
-  }
-  return Buffer.from(text, 'utf-8').toString('base64')
+  return compressToEncodedURIComponent(text)
 }
 
 export const decodeSnapshot = (snapshot: string): Scenario[] | null => {
@@ -87,6 +85,10 @@ export const decodeSnapshot = (snapshot: string): Scenario[] | null => {
     return null
   }
   try {
+    const inflated = decompressFromEncodedURIComponent(snapshot)
+    if (inflated) {
+      return coerceScenarioArray(JSON.parse(inflated))
+    }
     const json =
       typeof window !== 'undefined' && typeof window.atob === 'function'
         ? decodeURIComponent(window.atob(snapshot))
@@ -101,6 +103,11 @@ export const extractSnapshotFromLocation = (): Scenario[] | null => {
   if (typeof window === 'undefined') {
     return null
   }
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+  const hashEncoded = hashParams.get('snapshot')
+  if (hashEncoded) {
+    return decodeSnapshot(hashEncoded)
+  }
   const params = new URLSearchParams(window.location.search)
   const encoded = params.get('snapshot')
   if (!encoded) {
@@ -114,7 +121,7 @@ export const buildSnapshotUrl = (scenarios: Scenario[]): string => {
     return ''
   }
   const encoded = encodeSnapshot(scenarios)
-  const url = new URL(window.location.href)
-  url.searchParams.set('snapshot', encoded)
+  const url = new URL(window.location.origin + window.location.pathname)
+  url.hash = `snapshot=${encoded}`
   return url.toString()
 }
