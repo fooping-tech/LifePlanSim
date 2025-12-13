@@ -3,7 +3,7 @@ import {
   VictoryAxis,
   VictoryBar,
   VictoryChart,
-  VictoryLegend,
+  VictoryCursorContainer,
   VictoryLine,
   VictoryStack,
   VictoryTooltip,
@@ -27,9 +27,47 @@ const formatAxisManYen = (value: number) =>
   new Intl.NumberFormat('ja-JP', { maximumFractionDigits: 0 }).format(value / 10_000)
 
 const defaultChartPadding = { top: 40, bottom: 100, left: 110, right: 40 }
+const netWorthChartPadding = { top: 40, bottom: 88, left: 150, right: 48 }
 const dependentAxisStyle = {
   axisLabel: { padding: 62, fontSize: 12, fill: '#475569' },
   tickLabels: { fontSize: 10, padding: 4 },
+}
+const netWorthAxisStyle = {
+  axisLabel: { padding: 72, fontSize: 12, fill: '#475569' },
+  tickLabels: { fontSize: 10, padding: 6 },
+}
+
+const formatMillionYen = (value: number) =>
+  new Intl.NumberFormat('ja-JP', { maximumFractionDigits: 1 }).format(value / 1_000_000)
+
+const computeDomain = (values: number[]) => {
+  const finiteValues = values.filter((value) => Number.isFinite(value))
+  if (!finiteValues.length) {
+    return { min: 0, max: 1 }
+  }
+  const min = Math.min(...finiteValues)
+  const max = Math.max(...finiteValues)
+  if (min === max) {
+    return { min: min - 1, max: max + 1 }
+  }
+  const pad = (max - min) * 0.08
+  return { min: min - pad, max: max + pad }
+}
+
+const findNearestPoint = <T extends { x: number; y: number }>(series: T[], year: number): T | null => {
+  if (!series.length) {
+    return null
+  }
+  let best = series[0]
+  let bestDiff = Math.abs(series[0].x - year)
+  for (let i = 1; i < series.length; i += 1) {
+    const diff = Math.abs(series[i].x - year)
+    if (diff < bestDiff) {
+      best = series[i]
+      bestDiff = diff
+    }
+  }
+  return best
 }
 
 const useMeasuredWidth = () => {
@@ -179,6 +217,7 @@ const buildWaterfallData = (yearly: YearlyBreakdown[]): WaterfallEntry[] => {
 
 export const ScenarioResultsTabs = () => {
   const projections = useScenarioStore((state) => state.projections)
+  const scenarios = useScenarioStore((state) => state.scenarios)
   const comparison = useScenarioStore((state) => state.comparison)
   const SPECIAL_TABS = {
     overview: 'overview',
@@ -190,14 +229,23 @@ export const ScenarioResultsTabs = () => {
   const chartData = useMemo(
     () =>
       projections.map((projection, index) => {
-        const netWorthSeries = projection.yearly.map((entry) => ({ x: entry.year, y: entry.netWorth }))
-        const netCashSeries = projection.yearly.map((entry) => ({ x: entry.year, y: entry.netCashFlow }))
+        const netWorthSeries = projection.yearly.map((entry) => ({
+          x: entry.year,
+          y: Number.isFinite(entry.netWorth) ? entry.netWorth : 0,
+          meta: entry,
+        }))
+        const netCashSeries = projection.yearly.map((entry) => ({
+          x: entry.year,
+          y: Number.isFinite(entry.netCashFlow) ? entry.netCashFlow : 0,
+        }))
         const incomeSeries = buildIncomeSeries(projection.yearly)
         const expenseSeries = buildCashFlowSeries(projection.yearly)
         const expenseSeriesNegative = expenseSeries.map((entry) => ({
           ...entry,
           y: -entry.y,
         }))
+        const inputScenario = scenarios.find((scenario) => scenario.id === projection.scenarioId)
+        const residents = (inputScenario?.residents ?? []).map((resident) => ({ id: resident.id, name: resident.name }))
         return {
           id: projection.scenarioId,
           label: projection.scenarioName,
@@ -207,11 +255,13 @@ export const ScenarioResultsTabs = () => {
           cashIncomeSeries: incomeSeries,
         cashFlowSeries: expenseSeries,
         cashExpenseSeries: expenseSeriesNegative,
+          yearly: projection.yearly,
+          residents,
           waterfallData: buildWaterfallData(projection.yearly),
           summary: projection.summary,
         }
       }),
-    [projections],
+    [projections, scenarios],
   )
 
   const resolvedTab =
@@ -297,11 +347,13 @@ interface ScenarioChartsProps {
   scenario: {
     id: string
     label: string
-    netWorth: { x: number; y: number }[]
+    netWorth: { x: number; y: number; meta?: YearlyBreakdown }[]
     netCashFlow: { x: number; y: number }[]
     cashIncomeSeries: IncomeSeriesEntry[]
     cashExpenseSeries: CashExpenseSeriesEntry[]
     cashFlowSeries: CashFlowSeriesEntry[]
+    yearly: YearlyBreakdown[]
+    residents: Array<{ id: string; name: string }>
     waterfallData: WaterfallEntry[]
     summary: {
       totalIncome: number
@@ -318,6 +370,8 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
   const [view, setView] = useState<'netWorth' | 'cashFlow' | 'waterfall'>('netWorth')
   const { setContainer: setNetWorthContainer, width: netWorthWidth } = useMeasuredWidth()
   const { setContainer: setCashFlowContainer, width: cashFlowWidth } = useMeasuredWidth()
+  const netWorthDomain = useMemo(() => computeDomain(scenario.netWorth.map((point) => point.y)), [scenario.netWorth])
+  const [hover, setHover] = useState<{ year: number; netWorth: number; ages: string } | null>(null)
 
   return (
     <div className="scenario-results">
@@ -357,31 +411,61 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
             <h3>{scenario.label} - 純資産推移</h3>
             <span>最終: {formatCurrency(scenario.summary.finalNetWorth)}</span>
           </div>
-          <div ref={setNetWorthContainer}>
+          {hover ? (
+            <div className="chart-hover-panel" aria-live="polite">
+              <span>年: {hover.year}</span>
+              <span>年齢: {hover.ages}</span>
+              <span>残高: {formatMillionYen(hover.netWorth)}百万円</span>
+            </div>
+          ) : (
+            <div className="chart-hover-panel chart-hover-panel--hint">グラフにカーソルを合わせると詳細が表示されます</div>
+          )}
+          <div ref={setNetWorthContainer} className="chart-reveal chart-reveal--animate">
             <VictoryChart
               theme={VictoryTheme.material}
               height={300}
               width={netWorthWidth}
-              padding={defaultChartPadding}
+              padding={netWorthChartPadding}
+              domain={{ y: [netWorthDomain.min, netWorthDomain.max] }}
+              containerComponent={
+                <VictoryCursorContainer
+                  cursorDimension="x"
+                  cursorLabel={() => ''}
+                  cursorLabelComponent={<VictoryTooltip flyoutStyle={{ display: 'none' }} style={{ display: 'none' }} />}
+                  onCursorChange={(value) => {
+                    if (typeof value !== 'number' || !Number.isFinite(value)) {
+                      setHover(null)
+                      return
+                    }
+                    const year = Math.round(value)
+                    const nearest = findNearestPoint(scenario.netWorth, year)
+                    if (!nearest) {
+                      setHover(null)
+                      return
+                    }
+                    const netWorth = Number(nearest.y)
+                    const meta = (nearest as { meta?: YearlyBreakdown }).meta
+                    const ages =
+                      meta?.agesByResident
+                        ? scenario.residents
+                            .map((resident) => {
+                              const age = meta.agesByResident[resident.id]
+                              return typeof age === 'number' ? `${resident.name} ${age}歳` : null
+                            })
+                            .filter(Boolean)
+                            .join(' / ')
+                        : ''
+                    setHover({ year, netWorth, ages })
+                  }}
+                />
+              }
             >
-              <VictoryLegend
-                x={80}
-                y={0}
-                orientation="horizontal"
-                gutter={16}
-                data={[
-                  {
-                    name: scenario.label,
-                    symbol: { fill: color },
-                  },
-                ]}
-              />
               <VictoryAxis tickFormat={(tick) => `${tick}`} />
               <VictoryAxis
                 dependentAxis
                 tickFormat={formatAxisManYen}
                 label="万円"
-                style={dependentAxisStyle}
+                style={netWorthAxisStyle}
               />
               <VictoryLine
                 data={scenario.netWorth}
@@ -558,7 +642,7 @@ const CombinedCharts = ({
   scenarios: Array<{
     id: string
     label: string
-    netWorth: { x: number; y: number }[]
+    netWorth: { x: number; y: number; meta?: YearlyBreakdown }[]
     netCashFlow: { x: number; y: number }[]
     cashIncomeSeries: IncomeSeriesEntry[]
     cashExpenseSeries: CashExpenseSeriesEntry[]
@@ -569,6 +653,11 @@ const CombinedCharts = ({
   const [view, setView] = useState<'netWorth' | 'cashFlow'>('netWorth')
   const { setContainer: setNetWorthContainer, width: netWorthWidth } = useMeasuredWidth()
   const { setContainer: setCashFlowContainer, width: cashFlowWidth } = useMeasuredWidth()
+  const [hover, setHover] = useState<{ year: number; points: Array<{ label: string; value: number }> } | null>(null)
+  const netWorthDomain = useMemo(
+    () => computeDomain(scenarios.flatMap((scenario) => scenario.netWorth.map((point) => point.y))),
+    [scenarios],
+  )
   return (
     <div className="scenario-results">
       <div className="sub-tab-nav" role="tablist" aria-label="全体グラフ切り替え">
@@ -596,29 +685,55 @@ const CombinedCharts = ({
           <div className="chart-block__header">
             <h3>全シナリオ純資産比較</h3>
           </div>
-          <div ref={setNetWorthContainer}>
+          {hover ? (
+            <div className="chart-hover-panel" aria-live="polite">
+              <span>年: {hover.year}</span>
+              <span>
+                残高:{' '}
+                {hover.points.map((point) => `${point.label} ${formatMillionYen(point.value)}百万円`).join(' / ')}
+              </span>
+            </div>
+          ) : (
+            <div className="chart-hover-panel chart-hover-panel--hint">グラフにカーソルを合わせると詳細が表示されます</div>
+          )}
+          <div ref={setNetWorthContainer} className="chart-reveal chart-reveal--animate">
             <VictoryChart
               theme={VictoryTheme.material}
               height={300}
               width={netWorthWidth}
-              padding={defaultChartPadding}
+              padding={netWorthChartPadding}
+              domain={{ y: [netWorthDomain.min, netWorthDomain.max] }}
+              containerComponent={
+                <VictoryCursorContainer
+                  cursorDimension="x"
+                  cursorLabel={() => ''}
+                  cursorLabelComponent={<VictoryTooltip flyoutStyle={{ display: 'none' }} style={{ display: 'none' }} />}
+                  onCursorChange={(value) => {
+                    if (typeof value !== 'number' || !Number.isFinite(value)) {
+                      setHover(null)
+                      return
+                    }
+                    const year = Math.round(value)
+                    const points = scenarios
+                      .map((scenario) => {
+                        const nearest = findNearestPoint(scenario.netWorth, year)
+                        if (!nearest) {
+                          return null
+                        }
+                        return { label: scenario.label, value: Number(nearest.y) }
+                      })
+                      .filter(Boolean) as Array<{ label: string; value: number }>
+                    setHover({ year, points })
+                  }}
+                />
+              }
             >
-              <VictoryLegend
-                x={60}
-                y={0}
-                orientation="horizontal"
-                gutter={16}
-                data={scenarios.map((scenario) => ({
-                  name: scenario.label,
-                  symbol: { fill: scenario.color },
-                }))}
-              />
               <VictoryAxis tickFormat={(tick) => `${tick}`} />
               <VictoryAxis
                 dependentAxis
                 tickFormat={formatAxisManYen}
                 label="万円"
-                style={dependentAxisStyle}
+                style={netWorthAxisStyle}
               />
               {scenarios.map((scenario) => (
                 <VictoryLine
@@ -628,6 +743,14 @@ const CombinedCharts = ({
                 />
               ))}
             </VictoryChart>
+          </div>
+          <div className="chart-legend">
+            {scenarios.map((scenario) => (
+              <div key={scenario.id} className="chart-legend__item">
+                <span className="chart-legend__swatch" style={{ backgroundColor: scenario.color }} />
+                {scenario.label}
+              </div>
+            ))}
           </div>
         </div>
       ) : (

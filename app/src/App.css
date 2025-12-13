@@ -837,6 +837,50 @@ details summary {
   color: #475569;
 }
 
+.chart-hover-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.9rem;
+  align-items: center;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  font-size: 0.82rem;
+  color: #334155;
+  margin-bottom: 0.5rem;
+}
+
+.chart-hover-panel--hint {
+  color: #64748b;
+}
+
+.chart-reveal {
+  overflow: hidden;
+}
+
+.chart-reveal--animate svg {
+  animation: chart-reveal 700ms ease-out both;
+  will-change: clip-path;
+}
+
+@keyframes chart-reveal {
+  from {
+    -webkit-clip-path: inset(0 100% 0 0);
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    -webkit-clip-path: inset(0 0 0 0);
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chart-reveal--animate svg {
+    animation: none;
+  }
+}
+
 .scenario-results__summary {
   list-style: none;
   display: flex;

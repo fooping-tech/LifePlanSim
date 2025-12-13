@@ -17,6 +17,7 @@ Deliver a browser-based interactive simulator that lets households model long-te
 - [x] (2025-02-15 06:05Z) Expanded resident presets with child education patterns (私立小〜大学院、下宿含む) to accelerate dependent setup.
 - [x] (2025-12-13) Expanded JSON import/export flows with scenario-level export plus append/replace imports.
 - [x] (2025-12-13) Added optional slider controls for key numeric inputs in the editor.
+- [x] (2025-12-13) Improved net worth chart: axis padding, hover crosshair + ages tooltip, and reveal animation.
 
 ## Surprises & Discoveries
 
@@ -182,6 +183,25 @@ Milestone 4 (Validation & UX refinements) adds guardrails: highlight years where
     - Acceptance:
       - Users can adjust key numeric fields by dragging without breaking existing manual entry.
       - No regression in calculations (values persisted and imported/exported unchanged).
+27. Improve “純資産推移” chart (axis visibility, richer hover, and intro animation):
+    - Ensure the Y-axis is fully visible at all viewport sizes:
+      - Increase left padding / `domainPadding` for the net-worth chart and avoid clipping of tick labels + unit label.
+      - Re-check responsive container sizing so the chart never overflows its parent; prefer using `padding={{ left: ... }}` consistently.
+      - Acceptance: Y-axis ticks and the unit label are not cut off in desktop and in the editor overlay.
+    - Enhance hover interaction on net-worth chart:
+      - On cursor hover, show a vertical guide line at the active year (crosshair).
+      - Show a tooltip-like panel that includes:
+        - Year
+        - Each resident’s age for that year (derived from `agesByResident`)
+        - Net worth value formatted as `残高: **百万円` (convert JPY to millions, keep precision reasonable, e.g. 0.1).
+      - Implementation approach:
+        - Use Victory `VictoryVoronoiContainer` (or existing container pattern) to capture hover and compute nearest datum.
+        - Render a `VictoryLine` for the vertical guide line using the hovered x, and a small absolutely-positioned overlay for the tooltip to avoid SVG clipping.
+      - Acceptance: Hovering any point/year shows the guide line + ages + net worth in 百万円 without overflowing.
+    - Add left-to-right reveal animation when the chart is shown:
+      - Use Victory’s `animate` prop (if applicable) for line drawing, or implement a simple clip-path mask that expands from left to right on mount.
+      - Respect reduced motion: disable animation when `prefers-reduced-motion: reduce` is set (or when “色を抑える” mode is enabled if you choose to reuse that).
+      - Acceptance: On opening the results tab, the net-worth line reveals smoothly; no jank; reduced-motion users see no animation.
 
 ## Validation and Acceptance
 
