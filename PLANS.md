@@ -16,6 +16,7 @@ Deliver a browser-based interactive simulator that lets households model long-te
 - [x] (2025-02-15 05:45Z) Added savings preset catalog/hook/dialog and connected it to the 貯蓄口座一覧セクション for rapid口座追加.
 - [x] (2025-02-15 06:05Z) Expanded resident presets with child education patterns (私立小〜大学院、下宿含む) to accelerate dependent setup.
 - [x] (2025-12-13) Expanded JSON import/export flows with scenario-level export plus append/replace imports.
+- [x] (2025-12-13) Added optional slider controls for key numeric inputs in the editor.
 
 ## Surprises & Discoveries
 
@@ -156,6 +157,31 @@ Milestone 4 (Validation & UX refinements) adds guardrails: highlight years where
       - Show which mode was executed in the status line (“書き出し: 全件 / 読み込み: 追加”).
       - On import errors, show a friendly message + expected formats (`Scenario[]` / `{scenarios: []}`).
     - Acceptance: users can correctly choose “追加/置換” without reading docs; visually distinct icons and labels prevent accidental replacement.
+26. Add optional slider input for numeric fields (dual input UX):
+    - Introduce a small reusable component (e.g., `NumberInputWithSlider`) used across forms where it improves speed/intuition (amounts, ages, rates).
+    - UX:
+      - Keep the existing numeric input as the source of truth; the slider is an optional secondary control.
+      - Provide a compact toggle per field (e.g., “スライダ”) or a global “スライダ表示” switch to avoid clutter.
+      - Display the current value with units (万円 / % / 年 / 円) next to the slider; keep rounding consistent with existing 万円入力ルール.
+    - Ranges and steps:
+      - Define sensible defaults per field type (e.g., 年齢 0–100 step 1, 利率 0–10% step 0.1, 月額(万円) 0–100 step 0.5).
+      - Allow per-field override via props so high/low ranges (住宅ローン残高、購入価格など) can be tuned.
+      - Add “fine control” behavior: when holding Shift (or a small “微調整” toggle), use smaller step.
+    - Integration points (incremental):
+      - Start with the most-used fields in `ScenarioForm` (生活費、住宅費、車費、貯蓄積立、年収/昇給率).
+      - Expand to expense bands and events where it makes sense (年額、発生年齢/年).
+    - State handling:
+      - Ensure slider changes use the same onChange path as the input (react-hook-form controlled field) to keep validation and debounce simulation consistent.
+      - Clamp values to min/max; show validation errors as currently done.
+    - Accessibility:
+      - Use native `<input type="range">` with proper `aria-label`, value text, and keyboard support.
+      - Keep focus order predictable; do not trap focus inside slider UI.
+    - Styling:
+      - Compact row layout: label + input + optional slider on the next line within the same grid cell.
+      - Use CSS variables or existing tokens; avoid heavy new styles.
+    - Acceptance:
+      - Users can adjust key numeric fields by dragging without breaking existing manual entry.
+      - No regression in calculations (values persisted and imported/exported unchanged).
 
 ## Validation and Acceptance
 

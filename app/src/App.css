@@ -220,6 +220,43 @@
   color: #475569;
 }
 
+.slider-control {
+  margin-top: 0.35rem;
+}
+
+.slider-control__row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.25rem;
+}
+
+.slider-control__range {
+  flex: 1;
+  min-width: 0;
+}
+
+.slider-control__range input[type='range'] {
+  width: 100%;
+}
+
+.slider-control__value {
+  font-size: 0.8rem;
+  color: #334155;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.slider-control__hint {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
 .scenario-list__status {
   margin: 0;
   font-size: 0.85rem;

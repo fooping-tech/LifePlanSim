@@ -60,6 +60,10 @@ textarea {
   font: inherit;
 }
 
+.yen-input {
+  text-align: right;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

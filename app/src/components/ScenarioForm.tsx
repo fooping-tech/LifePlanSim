@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useFieldArray, useForm, useWatch } from 'react-hook-form'
-import type { Control, UseFormRegister } from 'react-hook-form'
+import { Controller, useFieldArray, useForm, useWatch } from 'react-hook-form'
+import type { Control, UseFormRegister, UseFormSetValue } from 'react-hook-form'
 import type { Scenario } from '@models/scenario'
 import type { Resident } from '@models/resident'
 import type { HousingPlan, LivingPlan, SavingsAccount, VehicleProfile } from '@models/finance'
@@ -10,6 +10,8 @@ import { HousingPresetDialog } from '@components/HousingPresetDialog'
 import { VehiclePresetDialog } from '@components/VehiclePresetDialog'
 import { SavingsPresetDialog } from '@components/SavingsPresetDialog'
 import { LivingPresetDialog } from '@components/LivingPresetDialog'
+import { SliderControl } from '@components/SliderControl'
+import { YenInput } from '@components/YenInput'
 import {
   IconCalendar,
   IconCar,
@@ -28,6 +30,18 @@ import { useDebouncedCallback } from '@utils/useDebouncedCallback'
 const YEN_STEP = 10000
 const formatManYen = (value: number, digits = 1) =>
   new Intl.NumberFormat('ja-JP', { maximumFractionDigits: digits }).format(value / 10_000)
+
+const clampNumber = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
+
+const autoMax = (value: number, defaultMax: number) => {
+  if (!Number.isFinite(value)) {
+    return defaultMax
+  }
+  if (value <= defaultMax) {
+    return defaultMax
+  }
+  return Math.ceil(value / defaultMax) * defaultMax
+}
 
 const formatManYenMonthlyAnnual = (annualYen: number): string => {
   const annual = Number.isFinite(annualYen) ? annualYen : 0
@@ -140,6 +154,7 @@ export const ScenarioForm = () => {
   const [savingsPresetOpen, setSavingsPresetOpen] = useState(false)
   const [compactMode, setCompactMode] = useState(true)
   const [reducedColorMode, setReducedColorMode] = useState(false)
+  const [sliderMode, setSliderMode] = useState(false)
 
   useEffect(() => {
     if (typeof document === 'undefined') {
@@ -366,6 +381,8 @@ export const ScenarioForm = () => {
                 index={index}
                 register={register}
                 control={control}
+                setValue={form.setValue}
+                sliderMode={sliderMode}
                 onRemove={() => removeResident(index)}
                 collapsed={collapsed}
                 onToggle={() =>
@@ -411,7 +428,8 @@ export const ScenarioForm = () => {
             const entityId = (field as { id?: string }).id ?? (field as { fieldKey?: string }).fieldKey
             const cardKey = `housing-${entityId ?? index}`
             const collapsed = collapsedMap[cardKey] ?? false
-            const type = (watchedValues.housingPlans?.[index] as HousingPlan | undefined)?.type ?? 'own'
+            const plan = watchedValues.housingPlans?.[index] as HousingPlan | undefined
+            const type = plan?.type ?? 'own'
 
             return (
               <div key={field.fieldKey ?? entityId ?? index} className="card collapsible-card">
@@ -502,50 +520,124 @@ export const ScenarioForm = () => {
                       <>
                         <label>
                           家賃（月額）
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            step={YEN_STEP}
-                            {...register(`housingPlans.${index}.monthlyRent` as const, { valueAsNumber: true })}
+                          <Controller
+                            control={control}
+                            name={`housingPlans.${index}.monthlyRent` as const}
+                            render={({ field }) => (
+                              <YenInput
+                                value={field.value}
+                                ariaLabel="家賃（月額）"
+                                onChange={(next) => field.onChange(next)}
+                                onBlur={() => field.onBlur()}
+                              />
+                            )}
                           />
+                          {sliderMode ? (
+                            <SliderControl
+                              ariaLabel="家賃（月額）"
+                              value={Number((plan as Extract<HousingPlan, { type: 'rent' }> | undefined)?.monthlyRent ?? 0)}
+                              min={0}
+                              max={autoMax(
+                                Number((plan as Extract<HousingPlan, { type: 'rent' }> | undefined)?.monthlyRent ?? 0),
+                                300000,
+                              )}
+                              step={1000}
+                              fineStep={100}
+                              onChange={(next) =>
+                                form.setValue(`housingPlans.${index}.monthlyRent` as const, clampNumber(next, 0, 50_000_000), {
+                                  shouldDirty: true,
+                                  shouldTouch: true,
+                                })
+                              }
+                              formatValue={(yen) =>
+                                `月額${formatManYen(yen, 1)}万（${Math.round(yen).toLocaleString()}円）`
+                              }
+                            />
+                          ) : null}
                         </label>
                         <label>
                           共益費など（月額）
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            step={YEN_STEP}
-                            {...register(`housingPlans.${index}.monthlyFees` as const, { valueAsNumber: true })}
+                          <Controller
+                            control={control}
+                            name={`housingPlans.${index}.monthlyFees` as const}
+                            render={({ field }) => (
+                              <YenInput
+                                value={field.value}
+                                ariaLabel="共益費など（月額）"
+                                onChange={(next) => field.onChange(next)}
+                                onBlur={() => field.onBlur()}
+                              />
+                            )}
                           />
+                          {sliderMode ? (
+                            <SliderControl
+                              ariaLabel="共益費など（月額）"
+                              value={Number((plan as Extract<HousingPlan, { type: 'rent' }> | undefined)?.monthlyFees ?? 0)}
+                              min={0}
+                              max={autoMax(
+                                Number((plan as Extract<HousingPlan, { type: 'rent' }> | undefined)?.monthlyFees ?? 0),
+                                50000,
+                              )}
+                              step={500}
+                              fineStep={100}
+                              onChange={(next) =>
+                                form.setValue(`housingPlans.${index}.monthlyFees` as const, clampNumber(next, 0, 50_000_000), {
+                                  shouldDirty: true,
+                                  shouldTouch: true,
+                                })
+                              }
+                              formatValue={(yen) =>
+                                `月額${formatManYen(yen, 1)}万（${Math.round(yen).toLocaleString()}円）`
+                              }
+                            />
+                          ) : null}
                         </label>
                         <details className="grid-span-all">
                           <summary>詳細</summary>
                           <div className="inline-card">
                             <label>
                               入居費用（初年度のみ）
-                              <input
-                                type="number"
-                                inputMode="numeric"
-                                step={YEN_STEP}
-                                {...register(`housingPlans.${index}.moveInCost` as const, { valueAsNumber: true })}
+                              <Controller
+                                control={control}
+                                name={`housingPlans.${index}.moveInCost` as const}
+                                render={({ field }) => (
+                                  <YenInput
+                                    value={field.value}
+                                    ariaLabel="入居費用（初年度のみ）"
+                                    onChange={(next) => field.onChange(next)}
+                                    onBlur={() => field.onBlur()}
+                                  />
+                                )}
                               />
                             </label>
                             <label>
                               退去費用（終了年のみ）
-                              <input
-                                type="number"
-                                inputMode="numeric"
-                                step={YEN_STEP}
-                                {...register(`housingPlans.${index}.moveOutCost` as const, { valueAsNumber: true })}
+                              <Controller
+                                control={control}
+                                name={`housingPlans.${index}.moveOutCost` as const}
+                                render={({ field }) => (
+                                  <YenInput
+                                    value={field.value}
+                                    ariaLabel="退去費用（終了年のみ）"
+                                    onChange={(next) => field.onChange(next)}
+                                    onBlur={() => field.onBlur()}
+                                  />
+                                )}
                               />
                             </label>
                             <label>
                               その他年間費用
-                              <input
-                                type="number"
-                                inputMode="numeric"
-                                step={YEN_STEP}
-                                {...register(`housingPlans.${index}.extraAnnualCosts` as const, { valueAsNumber: true })}
+                              <Controller
+                                control={control}
+                                name={`housingPlans.${index}.extraAnnualCosts` as const}
+                                render={({ field }) => (
+                                  <YenInput
+                                    value={field.value}
+                                    ariaLabel="その他年間費用"
+                                    onChange={(next) => field.onChange(next)}
+                                    onBlur={() => field.onBlur()}
+                                  />
+                                )}
                               />
                             </label>
                           </div>
@@ -563,68 +655,187 @@ export const ScenarioForm = () => {
                         </label>
                         <label>
                           ローン残額
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            step={YEN_STEP}
-                            {...register(`housingPlans.${index}.mortgageRemaining` as const, { valueAsNumber: true })}
+                          <Controller
+                            control={control}
+                            name={`housingPlans.${index}.mortgageRemaining` as const}
+                            render={({ field }) => (
+                              <YenInput
+                                value={field.value}
+                                ariaLabel="ローン残額"
+                                onChange={(next) => field.onChange(next)}
+                                onBlur={() => field.onBlur()}
+                              />
+                            )}
                           />
                         </label>
                         <label>
                           月々のローン
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            step={YEN_STEP}
-                            {...register(`housingPlans.${index}.monthlyMortgage` as const, { valueAsNumber: true })}
+                          <Controller
+                            control={control}
+                            name={`housingPlans.${index}.monthlyMortgage` as const}
+                            render={({ field }) => (
+                              <YenInput
+                                value={field.value}
+                                ariaLabel="月々のローン"
+                                onChange={(next) => field.onChange(next)}
+                                onBlur={() => field.onBlur()}
+                              />
+                            )}
                           />
+                          {sliderMode ? (
+                            <SliderControl
+                              ariaLabel="月々のローン"
+                              value={Number((plan as Extract<HousingPlan, { type: 'own' }> | undefined)?.monthlyMortgage ?? 0)}
+                              min={0}
+                              max={autoMax(
+                                Number((plan as Extract<HousingPlan, { type: 'own' }> | undefined)?.monthlyMortgage ?? 0),
+                                250000,
+                              )}
+                              step={1000}
+                              fineStep={100}
+                              onChange={(next) =>
+                                form.setValue(
+                                  `housingPlans.${index}.monthlyMortgage` as const,
+                                  clampNumber(next, 0, 50_000_000),
+                                  { shouldDirty: true, shouldTouch: true },
+                                )
+                              }
+                              formatValue={(yen) =>
+                                `月額${formatManYen(yen, 1)}万（${Math.round(yen).toLocaleString()}円）`
+                              }
+                            />
+                          ) : null}
                         </label>
                         <label>
                           管理費（月額）
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            step={YEN_STEP}
-                            {...register(`housingPlans.${index}.managementFeeMonthly` as const, { valueAsNumber: true })}
+                          <Controller
+                            control={control}
+                            name={`housingPlans.${index}.managementFeeMonthly` as const}
+                            render={({ field }) => (
+                              <YenInput
+                                value={field.value}
+                                ariaLabel="管理費（月額）"
+                                onChange={(next) => field.onChange(next)}
+                                onBlur={() => field.onBlur()}
+                              />
+                            )}
                           />
+                          {sliderMode ? (
+                            <SliderControl
+                              ariaLabel="管理費（月額）"
+                              value={Number(
+                                (plan as Extract<HousingPlan, { type: 'own' }> | undefined)?.managementFeeMonthly ?? 0,
+                              )}
+                              min={0}
+                              max={autoMax(
+                                Number(
+                                  (plan as Extract<HousingPlan, { type: 'own' }> | undefined)?.managementFeeMonthly ?? 0,
+                                ),
+                                80000,
+                              )}
+                              step={500}
+                              fineStep={100}
+                              onChange={(next) =>
+                                form.setValue(
+                                  `housingPlans.${index}.managementFeeMonthly` as const,
+                                  clampNumber(next, 0, 50_000_000),
+                                  { shouldDirty: true, shouldTouch: true },
+                                )
+                              }
+                              formatValue={(yen) =>
+                                `月額${formatManYen(yen, 1)}万（${Math.round(yen).toLocaleString()}円）`
+                              }
+                            />
+                          ) : null}
                         </label>
                         <label>
                           修繕積立（月額）
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            step={YEN_STEP}
-                            {...register(`housingPlans.${index}.maintenanceReserveMonthly` as const, { valueAsNumber: true })}
+                          <Controller
+                            control={control}
+                            name={`housingPlans.${index}.maintenanceReserveMonthly` as const}
+                            render={({ field }) => (
+                              <YenInput
+                                value={field.value}
+                                ariaLabel="修繕積立（月額）"
+                                onChange={(next) => field.onChange(next)}
+                                onBlur={() => field.onBlur()}
+                              />
+                            )}
                           />
+                          {sliderMode ? (
+                            <SliderControl
+                              ariaLabel="修繕積立（月額）"
+                              value={Number(
+                                (plan as Extract<HousingPlan, { type: 'own' }> | undefined)?.maintenanceReserveMonthly ?? 0,
+                              )}
+                              min={0}
+                              max={autoMax(
+                                Number(
+                                  (plan as Extract<HousingPlan, { type: 'own' }> | undefined)?.maintenanceReserveMonthly ?? 0,
+                                ),
+                                80000,
+                              )}
+                              step={500}
+                              fineStep={100}
+                              onChange={(next) =>
+                                form.setValue(
+                                  `housingPlans.${index}.maintenanceReserveMonthly` as const,
+                                  clampNumber(next, 0, 50_000_000),
+                                  { shouldDirty: true, shouldTouch: true },
+                                )
+                              }
+                              formatValue={(yen) =>
+                                `月額${formatManYen(yen, 1)}万（${Math.round(yen).toLocaleString()}円）`
+                              }
+                            />
+                          ) : null}
                         </label>
                         <details className="grid-span-all">
                           <summary>詳細</summary>
                           <div className="inline-card">
                             <label>
                               購入費用（開始年のみ）
-                              <input
-                                type="number"
-                                inputMode="numeric"
-                                step={YEN_STEP}
-                                {...register(`housingPlans.${index}.purchaseCost` as const, { valueAsNumber: true })}
+                              <Controller
+                                control={control}
+                                name={`housingPlans.${index}.purchaseCost` as const}
+                                render={({ field }) => (
+                                  <YenInput
+                                    value={field.value}
+                                    ariaLabel="購入費用（開始年のみ）"
+                                    onChange={(next) => field.onChange(next)}
+                                    onBlur={() => field.onBlur()}
+                                  />
+                                )}
                               />
                             </label>
                             <label>
                               売却額（終了年のみ）
-                              <input
-                                type="number"
-                                inputMode="numeric"
-                                step={YEN_STEP}
-                                {...register(`housingPlans.${index}.saleValue` as const, { valueAsNumber: true })}
+                              <Controller
+                                control={control}
+                                name={`housingPlans.${index}.saleValue` as const}
+                                render={({ field }) => (
+                                  <YenInput
+                                    value={field.value}
+                                    ariaLabel="売却額（終了年のみ）"
+                                    onChange={(next) => field.onChange(next)}
+                                    onBlur={() => field.onBlur()}
+                                  />
+                                )}
                               />
                             </label>
                             <label>
                               その他年間費用
-                              <input
-                                type="number"
-                                inputMode="numeric"
-                                step={YEN_STEP}
-                                {...register(`housingPlans.${index}.extraAnnualCosts` as const, { valueAsNumber: true })}
+                              <Controller
+                                control={control}
+                                name={`housingPlans.${index}.extraAnnualCosts` as const}
+                                render={({ field }) => (
+                                  <YenInput
+                                    value={field.value}
+                                    ariaLabel="その他年間費用"
+                                    onChange={(next) => field.onChange(next)}
+                                    onBlur={() => field.onBlur()}
+                                  />
+                                )}
                               />
                             </label>
                           </div>
@@ -675,6 +886,7 @@ export const ScenarioForm = () => {
             const entityId = (field as { id?: string }).id ?? (field as { fieldKey?: string }).fieldKey
             const cardKey = `vehicle-${entityId ?? index}`
             const collapsed = collapsedMap[cardKey] ?? false
+            const vehicle = (watchedValues.vehicles?.[index] as VehicleProfile | undefined) ?? field
             return (
               <div key={field.fieldKey ?? entityId ?? index} className="card collapsible-card">
                 <div className="collapsible-card__header">
@@ -712,36 +924,67 @@ export const ScenarioForm = () => {
                     </label>
                     <label>
                       購入額（一括）
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        step={YEN_STEP}
-                        {...register(`vehicles.${index}.purchasePrice` as const, {
-                          valueAsNumber: true,
-                        })}
+                      <Controller
+                        control={control}
+                        name={`vehicles.${index}.purchasePrice` as const}
+                        render={({ field }) => (
+                          <YenInput
+                            value={field.value}
+                            ariaLabel="購入額（一括）"
+                            onChange={(next) => field.onChange(next)}
+                            onBlur={() => field.onBlur()}
+                          />
+                        )}
                       />
                     </label>
                     <label>
                       ローン残額
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        step={YEN_STEP}
-                        {...register(`vehicles.${index}.loanRemaining` as const, {
-                          valueAsNumber: true,
-                        })}
+                      <Controller
+                        control={control}
+                        name={`vehicles.${index}.loanRemaining` as const}
+                        render={({ field }) => (
+                          <YenInput
+                            value={field.value}
+                            ariaLabel="ローン残額"
+                            onChange={(next) => field.onChange(next)}
+                            onBlur={() => field.onBlur()}
+                          />
+                        )}
                       />
                     </label>
                     <label>
                       月々のローン
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        step={YEN_STEP}
-                        {...register(`vehicles.${index}.monthlyLoan` as const, {
-                          valueAsNumber: true,
-                        })}
+                      <Controller
+                        control={control}
+                        name={`vehicles.${index}.monthlyLoan` as const}
+                        render={({ field }) => (
+                          <YenInput
+                            value={field.value}
+                            ariaLabel="月々のローン"
+                            onChange={(next) => field.onChange(next)}
+                            onBlur={() => field.onBlur()}
+                          />
+                        )}
                       />
+                      {sliderMode ? (
+                        <SliderControl
+                          ariaLabel="月々のローン"
+                          value={Number(vehicle.monthlyLoan ?? 0)}
+                          min={0}
+                          max={autoMax(Number(vehicle.monthlyLoan ?? 0), 150000)}
+                          step={1000}
+                          fineStep={100}
+                          onChange={(next) =>
+                            form.setValue(`vehicles.${index}.monthlyLoan` as const, clampNumber(next, 0, 50_000_000), {
+                              shouldDirty: true,
+                              shouldTouch: true,
+                            })
+                          }
+                          formatValue={(yen) =>
+                            `月額${formatManYen(yen, 1)}万（${Math.round(yen).toLocaleString()}円）`
+                          }
+                        />
+                      ) : null}
                     </label>
                     <label>
                       車検周期（年）
@@ -754,47 +997,119 @@ export const ScenarioForm = () => {
                     </label>
                     <label>
                       車検費用
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        step={YEN_STEP}
-                        {...register(`vehicles.${index}.inspectionCost` as const, {
-                          valueAsNumber: true,
-                        })}
+                      <Controller
+                        control={control}
+                        name={`vehicles.${index}.inspectionCost` as const}
+                        render={({ field }) => (
+                          <YenInput
+                            value={field.value}
+                            ariaLabel="車検費用"
+                            onChange={(next) => field.onChange(next)}
+                            onBlur={() => field.onBlur()}
+                          />
+                        )}
                       />
                     </label>
                     <label>
                       年間メンテ費用
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        step={YEN_STEP}
-                        {...register(`vehicles.${index}.maintenanceAnnual` as const, {
-                          valueAsNumber: true,
-                        })}
+                      <Controller
+                        control={control}
+                        name={`vehicles.${index}.maintenanceAnnual` as const}
+                        render={({ field }) => (
+                          <YenInput
+                            value={field.value}
+                            ariaLabel="年間メンテ費用"
+                            onChange={(next) => field.onChange(next)}
+                            onBlur={() => field.onBlur()}
+                          />
+                        )}
                       />
+                      {sliderMode ? (
+                        <SliderControl
+                          ariaLabel="年間メンテ費用"
+                          value={Number(vehicle.maintenanceAnnual ?? 0)}
+                          min={0}
+                          max={autoMax(Number(vehicle.maintenanceAnnual ?? 0), 300000)}
+                          step={YEN_STEP}
+                          fineStep={1000}
+                          onChange={(next) =>
+                            form.setValue(
+                              `vehicles.${index}.maintenanceAnnual` as const,
+                              clampNumber(next, 0, 50_000_000),
+                              { shouldDirty: true, shouldTouch: true },
+                            )
+                          }
+                          formatValue={(yen) => `年額${formatManYen(yen, 0)}万`}
+                        />
+                      ) : null}
                     </label>
                     <label>
                       駐車場（月額）
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        step={YEN_STEP}
-                        {...register(`vehicles.${index}.parkingMonthly` as const, {
-                          valueAsNumber: true,
-                        })}
+                      <Controller
+                        control={control}
+                        name={`vehicles.${index}.parkingMonthly` as const}
+                        render={({ field }) => (
+                          <YenInput
+                            value={field.value}
+                            ariaLabel="駐車場（月額）"
+                            onChange={(next) => field.onChange(next)}
+                            onBlur={() => field.onBlur()}
+                          />
+                        )}
                       />
+                      {sliderMode ? (
+                        <SliderControl
+                          ariaLabel="駐車場（月額）"
+                          value={Number(vehicle.parkingMonthly ?? 0)}
+                          min={0}
+                          max={autoMax(Number(vehicle.parkingMonthly ?? 0), 50000)}
+                          step={500}
+                          fineStep={100}
+                          onChange={(next) =>
+                            form.setValue(
+                              `vehicles.${index}.parkingMonthly` as const,
+                              clampNumber(next, 0, 50_000_000),
+                              { shouldDirty: true, shouldTouch: true },
+                            )
+                          }
+                          formatValue={(yen) =>
+                            `月額${formatManYen(yen, 1)}万（${Math.round(yen).toLocaleString()}円）`
+                          }
+                        />
+                      ) : null}
                     </label>
                     <label>
                       保険（年額）
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        step={YEN_STEP}
-                        {...register(`vehicles.${index}.insuranceAnnual` as const, {
-                          valueAsNumber: true,
-                        })}
+                      <Controller
+                        control={control}
+                        name={`vehicles.${index}.insuranceAnnual` as const}
+                        render={({ field }) => (
+                          <YenInput
+                            value={field.value}
+                            ariaLabel="保険（年額）"
+                            onChange={(next) => field.onChange(next)}
+                            onBlur={() => field.onBlur()}
+                          />
+                        )}
                       />
+                      {sliderMode ? (
+                        <SliderControl
+                          ariaLabel="保険（年額）"
+                          value={Number(vehicle.insuranceAnnual ?? 0)}
+                          min={0}
+                          max={autoMax(Number(vehicle.insuranceAnnual ?? 0), 200000)}
+                          step={YEN_STEP}
+                          fineStep={1000}
+                          onChange={(next) =>
+                            form.setValue(
+                              `vehicles.${index}.insuranceAnnual` as const,
+                              clampNumber(next, 0, 50_000_000),
+                              { shouldDirty: true, shouldTouch: true },
+                            )
+                          }
+                          formatValue={(yen) => `年額${formatManYen(yen, 0)}万`}
+                        />
+                      ) : null}
                     </label>
                     <label>
                       売却/廃棄年
@@ -807,13 +1122,17 @@ export const ScenarioForm = () => {
                     </label>
                     <label>
                       売却額
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        step={YEN_STEP}
-                        {...register(`vehicles.${index}.disposalValue` as const, {
-                          valueAsNumber: true,
-                        })}
+                      <Controller
+                        control={control}
+                        name={`vehicles.${index}.disposalValue` as const}
+                        render={({ field }) => (
+                          <YenInput
+                            value={field.value}
+                            ariaLabel="売却額"
+                            onChange={(next) => field.onChange(next)}
+                            onBlur={() => field.onBlur()}
+                          />
+                        )}
                       />
                     </label>
                   </div>
@@ -907,83 +1226,167 @@ export const ScenarioForm = () => {
                     </label>
                     <label>
                       基本生活費（月）
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        step={1000}
+                      <YenInput
                         value={Math.round(((plan?.baseAnnual ?? 0) as number) / 12)}
-                        onChange={(event) => {
-                          const nextMonthly = Number(event.target.value || 0)
+                        ariaLabel="基本生活費（月）"
+                        onChange={(nextMonthly) =>
                           form.setValue(`livingPlans.${index}.baseAnnual` as const, nextMonthly * 12, {
                             shouldDirty: true,
                             shouldTouch: true,
                           })
-                        }}
+                        }
                       />
+                      {sliderMode ? (
+                        <SliderControl
+                          ariaLabel="基本生活費（月）"
+                          value={Math.round(((plan?.baseAnnual ?? 0) as number) / 12)}
+                          min={0}
+                          max={autoMax(Math.round(((plan?.baseAnnual ?? 0) as number) / 12), 300000)}
+                          step={1000}
+                          fineStep={100}
+                          onChange={(nextMonthly) =>
+                            form.setValue(`livingPlans.${index}.baseAnnual` as const, clampNumber(nextMonthly, 0, 50_000_000) * 12, {
+                              shouldDirty: true,
+                              shouldTouch: true,
+                            })
+                          }
+                          formatValue={(yen) =>
+                            `月額${formatManYen(yen, 1)}万（${Math.round(yen).toLocaleString()}円）`
+                          }
+                        />
+                      ) : null}
                     </label>
                     <label>
                       保険（月）
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        step={1000}
+                      <YenInput
                         value={Math.round(((plan?.insuranceAnnual ?? 0) as number) / 12)}
-                        onChange={(event) => {
-                          const nextMonthly = Number(event.target.value || 0)
+                        ariaLabel="保険（月）"
+                        onChange={(nextMonthly) =>
                           form.setValue(`livingPlans.${index}.insuranceAnnual` as const, nextMonthly * 12, {
                             shouldDirty: true,
                             shouldTouch: true,
                           })
-                        }}
+                        }
                       />
+                      {sliderMode ? (
+                        <SliderControl
+                          ariaLabel="保険（月）"
+                          value={Math.round(((plan?.insuranceAnnual ?? 0) as number) / 12)}
+                          min={0}
+                          max={autoMax(Math.round(((plan?.insuranceAnnual ?? 0) as number) / 12), 100000)}
+                          step={500}
+                          fineStep={100}
+                          onChange={(nextMonthly) =>
+                            form.setValue(
+                              `livingPlans.${index}.insuranceAnnual` as const,
+                              clampNumber(nextMonthly, 0, 50_000_000) * 12,
+                              { shouldDirty: true, shouldTouch: true },
+                            )
+                          }
+                          formatValue={(yen) =>
+                            `月額${formatManYen(yen, 1)}万（${Math.round(yen).toLocaleString()}円）`
+                          }
+                        />
+                      ) : null}
                     </label>
                     <label>
                       光熱費（月）
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        step={1000}
+                      <YenInput
                         value={Math.round(((plan?.utilitiesAnnual ?? 0) as number) / 12)}
-                        onChange={(event) => {
-                          const nextMonthly = Number(event.target.value || 0)
+                        ariaLabel="光熱費（月）"
+                        onChange={(nextMonthly) =>
                           form.setValue(`livingPlans.${index}.utilitiesAnnual` as const, nextMonthly * 12, {
                             shouldDirty: true,
                             shouldTouch: true,
                           })
-                        }}
+                        }
                       />
+                      {sliderMode ? (
+                        <SliderControl
+                          ariaLabel="光熱費（月）"
+                          value={Math.round(((plan?.utilitiesAnnual ?? 0) as number) / 12)}
+                          min={0}
+                          max={autoMax(Math.round(((plan?.utilitiesAnnual ?? 0) as number) / 12), 100000)}
+                          step={500}
+                          fineStep={100}
+                          onChange={(nextMonthly) =>
+                            form.setValue(
+                              `livingPlans.${index}.utilitiesAnnual` as const,
+                              clampNumber(nextMonthly, 0, 50_000_000) * 12,
+                              { shouldDirty: true, shouldTouch: true },
+                            )
+                          }
+                          formatValue={(yen) =>
+                            `月額${formatManYen(yen, 1)}万（${Math.round(yen).toLocaleString()}円）`
+                          }
+                        />
+                      ) : null}
                     </label>
                     <label>
                       自由費（月）
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        step={1000}
+                      <YenInput
                         value={Math.round(((plan?.discretionaryAnnual ?? 0) as number) / 12)}
-                        onChange={(event) => {
-                          const nextMonthly = Number(event.target.value || 0)
+                        ariaLabel="自由費（月）"
+                        onChange={(nextMonthly) =>
                           form.setValue(`livingPlans.${index}.discretionaryAnnual` as const, nextMonthly * 12, {
                             shouldDirty: true,
                             shouldTouch: true,
                           })
-                        }}
+                        }
                       />
+                      {sliderMode ? (
+                        <SliderControl
+                          ariaLabel="自由費（月）"
+                          value={Math.round(((plan?.discretionaryAnnual ?? 0) as number) / 12)}
+                          min={0}
+                          max={autoMax(Math.round(((plan?.discretionaryAnnual ?? 0) as number) / 12), 200000)}
+                          step={1000}
+                          fineStep={100}
+                          onChange={(nextMonthly) =>
+                            form.setValue(
+                              `livingPlans.${index}.discretionaryAnnual` as const,
+                              clampNumber(nextMonthly, 0, 50_000_000) * 12,
+                              { shouldDirty: true, shouldTouch: true },
+                            )
+                          }
+                          formatValue={(yen) =>
+                            `月額${formatManYen(yen, 1)}万（${Math.round(yen).toLocaleString()}円）`
+                          }
+                        />
+                      ) : null}
                     </label>
                     <label>
                       医療費（月）
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        step={1000}
+                      <YenInput
                         value={Math.round(((plan?.healthcareAnnual ?? 0) as number) / 12)}
-                        onChange={(event) => {
-                          const nextMonthly = Number(event.target.value || 0)
+                        ariaLabel="医療費（月）"
+                        onChange={(nextMonthly) =>
                           form.setValue(`livingPlans.${index}.healthcareAnnual` as const, nextMonthly * 12, {
                             shouldDirty: true,
                             shouldTouch: true,
                           })
-                        }}
+                        }
                       />
+                      {sliderMode ? (
+                        <SliderControl
+                          ariaLabel="医療費（月）"
+                          value={Math.round(((plan?.healthcareAnnual ?? 0) as number) / 12)}
+                          min={0}
+                          max={autoMax(Math.round(((plan?.healthcareAnnual ?? 0) as number) / 12), 100000)}
+                          step={500}
+                          fineStep={100}
+                          onChange={(nextMonthly) =>
+                            form.setValue(
+                              `livingPlans.${index}.healthcareAnnual` as const,
+                              clampNumber(nextMonthly, 0, 50_000_000) * 12,
+                              { shouldDirty: true, shouldTouch: true },
+                            )
+                          }
+                          formatValue={(yen) =>
+                            `月額${formatManYen(yen, 1)}万（${Math.round(yen).toLocaleString()}円）`
+                          }
+                        />
+                      ) : null}
                     </label>
                     <label>
                       物価上昇率
@@ -995,6 +1398,23 @@ export const ScenarioForm = () => {
                           setValueAs: (value) => (value === '' || value === null ? undefined : Number(value)),
                         })}
                       />
+                      {sliderMode ? (
+                        <SliderControl
+                          ariaLabel="物価上昇率"
+                          value={Number(plan?.inflationRate ?? 0)}
+                          min={0}
+                          max={0.1}
+                          step={0.01}
+                          fineStep={0.001}
+                          onChange={(next) =>
+                            form.setValue(`livingPlans.${index}.inflationRate` as const, next, {
+                              shouldDirty: true,
+                              shouldTouch: true,
+                            })
+                          }
+                          formatValue={(v) => `${Math.round(v * 1000) / 10}%`}
+                        />
+                      ) : null}
                     </label>
                     <div className="action-row grid-span-all">
                       <button
@@ -1045,6 +1465,7 @@ export const ScenarioForm = () => {
             const entityId = (field as { id?: string }).id ?? (field as { fieldKey?: string }).fieldKey
             const cardKey = `savings-${entityId ?? index}`
             const collapsed = collapsedMap[cardKey] ?? false
+            const account = (watchedValues.savingsAccounts?.[index] as SavingsAccount | undefined) ?? field
             return (
               <div key={field.fieldKey ?? entityId ?? index} className="card collapsible-card">
                 <div className="collapsible-card__header">
@@ -1080,25 +1501,51 @@ export const ScenarioForm = () => {
                     </label>
                     <label>
                       残高
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        step={YEN_STEP}
-                        {...register(`savingsAccounts.${index}.balance` as const, {
-                          valueAsNumber: true,
-                        })}
+                      <Controller
+                        control={control}
+                        name={`savingsAccounts.${index}.balance` as const}
+                        render={({ field }) => (
+                          <YenInput
+                            value={field.value}
+                            ariaLabel="残高"
+                            onChange={(next) => field.onChange(next)}
+                            onBlur={() => field.onBlur()}
+                          />
+                        )}
                       />
                     </label>
                     <label>
                       年間積立額
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        step={YEN_STEP}
-                        {...register(`savingsAccounts.${index}.annualContribution` as const, {
-                          valueAsNumber: true,
-                        })}
+                      <Controller
+                        control={control}
+                        name={`savingsAccounts.${index}.annualContribution` as const}
+                        render={({ field }) => (
+                          <YenInput
+                            value={field.value}
+                            ariaLabel="年間積立額"
+                            onChange={(next) => field.onChange(next)}
+                            onBlur={() => field.onBlur()}
+                          />
+                        )}
                       />
+                      {sliderMode ? (
+                        <SliderControl
+                          ariaLabel="年間積立額"
+                          value={Number(account.annualContribution ?? 0)}
+                          min={0}
+                          max={autoMax(Number(account.annualContribution ?? 0), 2_400_000)}
+                          step={YEN_STEP}
+                          fineStep={1000}
+                          onChange={(next) =>
+                            form.setValue(
+                              `savingsAccounts.${index}.annualContribution` as const,
+                              clampNumber(next, 0, 500_000_000),
+                              { shouldDirty: true, shouldTouch: true },
+                            )
+                          }
+                          formatValue={(yen) => formatManYenMonthlyAnnual(yen)}
+                        />
+                      ) : null}
                     </label>
                     <label>
                       年利
@@ -1110,6 +1557,23 @@ export const ScenarioForm = () => {
                           valueAsNumber: true,
                         })}
                       />
+                      {sliderMode ? (
+                        <SliderControl
+                          ariaLabel="年利"
+                          value={Number(account.annualInterestRate ?? 0)}
+                          min={0}
+                          max={0.2}
+                          step={0.01}
+                          fineStep={0.001}
+                          onChange={(next) =>
+                            form.setValue(`savingsAccounts.${index}.annualInterestRate` as const, next, {
+                              shouldDirty: true,
+                              shouldTouch: true,
+                            })
+                          }
+                          formatValue={(v) => `${Math.round(v * 1000) / 10}%`}
+                        />
+                      ) : null}
                     </label>
                     <label>
                       引き出し優先度
@@ -1211,13 +1675,17 @@ export const ScenarioForm = () => {
                     </label>
                     <label>
                       年間支出
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        step={YEN_STEP}
-                        {...register(`expenseBands.${index}.annualAmount` as const, {
-                          valueAsNumber: true,
-                        })}
+                      <Controller
+                        control={control}
+                        name={`expenseBands.${index}.annualAmount` as const}
+                        render={({ field }) => (
+                          <YenInput
+                            value={field.value}
+                            ariaLabel="イベント支出（年額）"
+                            onChange={(next) => field.onChange(next)}
+                            onBlur={() => field.onBlur()}
+                          />
+                        )}
                       />
                     </label>
                     <label>
@@ -1270,6 +1738,14 @@ export const ScenarioForm = () => {
               onClick={() => setCompactMode((prev) => !prev)}
             >
               {compactMode ? '表示を通常に' : '表示をコンパクトに'}
+            </button>
+            <button
+              type="button"
+              className="link-button"
+              aria-pressed={sliderMode}
+              onClick={() => setSliderMode((prev) => !prev)}
+            >
+              {sliderMode ? 'スライダを隠す' : 'スライダを表示'}
             </button>
             <button
               type="button"
@@ -1432,6 +1908,8 @@ interface ResidentCardProps {
   index: number
   control: Control<Scenario>
   register: UseFormRegister<Scenario>
+  setValue: UseFormSetValue<Scenario>
+  sliderMode: boolean
   onRemove: () => void
   collapsed: boolean
   onToggle: () => void
@@ -1441,10 +1919,13 @@ const ResidentCard = ({
   index,
   control,
   register,
+  setValue,
+  sliderMode,
   onRemove,
   collapsed,
   onToggle,
 }: ResidentCardProps) => {
+  const resident = useWatch({ control, name: `residents.${index}` as const }) as Resident | undefined
   const {
     fields: incomeEventFields,
     append: appendIncomeEvent,
@@ -1503,6 +1984,23 @@ const ResidentCard = ({
                 type="number"
                 {...register(`residents.${index}.currentAge` as const, { valueAsNumber: true })}
               />
+              {sliderMode ? (
+                <SliderControl
+                  ariaLabel="現在年齢"
+                  value={Number(resident?.currentAge ?? 0)}
+                  min={0}
+                  max={100}
+                  step={1}
+                  fineStep={1}
+                  onChange={(next) =>
+                    setValue(`residents.${index}.currentAge` as const, clampNumber(next, 0, 100), {
+                      shouldDirty: true,
+                      shouldTouch: true,
+                    })
+                  }
+                  formatValue={(v) => `${v}歳`}
+                />
+              ) : null}
             </label>
             <label>
               退職年齢
@@ -1510,17 +2008,57 @@ const ResidentCard = ({
                 type="number"
                 {...register(`residents.${index}.retirementAge` as const, { valueAsNumber: true })}
               />
+              {sliderMode ? (
+                <SliderControl
+                  ariaLabel="退職年齢"
+                  value={Number(resident?.retirementAge ?? 0)}
+                  min={Number(resident?.currentAge ?? 0)}
+                  max={100}
+                  step={1}
+                  fineStep={1}
+                  onChange={(next) =>
+                    setValue(`residents.${index}.retirementAge` as const, clampNumber(next, Number(resident?.currentAge ?? 0), 100), {
+                      shouldDirty: true,
+                      shouldTouch: true,
+                    })
+                  }
+                  formatValue={(v) => `${v}歳`}
+                />
+              ) : null}
             </label>
           </div>
           <div className="grid-2 grid-span-all">
             <label>
               手取り収入（年）
-              <input
-                type="number"
-                inputMode="numeric"
-                step={YEN_STEP}
-                {...register(`residents.${index}.baseNetIncome` as const, { valueAsNumber: true })}
+              <Controller
+                control={control}
+                name={`residents.${index}.baseNetIncome` as const}
+                render={({ field }) => (
+                  <YenInput
+                    value={field.value}
+                    ariaLabel="手取り収入（年）"
+                    onChange={(next) => field.onChange(next)}
+                    onBlur={() => field.onBlur()}
+                  />
+                )}
               />
+              {sliderMode ? (
+                <SliderControl
+                  ariaLabel="手取り収入（年）"
+                  value={Number(resident?.baseNetIncome ?? 0)}
+                  min={0}
+                  max={autoMax(Number(resident?.baseNetIncome ?? 0), 20_000_000)}
+                  step={100_000}
+                  fineStep={10_000}
+                  onChange={(next) =>
+                    setValue(`residents.${index}.baseNetIncome` as const, clampNumber(next, 0, 1_000_000_000), {
+                      shouldDirty: true,
+                      shouldTouch: true,
+                    })
+                  }
+                  formatValue={(yen) => `年額${formatManYen(yen, 0)}万`}
+                />
+              ) : null}
             </label>
             <label>
               年次上昇率
@@ -1531,6 +2069,23 @@ const ResidentCard = ({
                   valueAsNumber: true,
                 })}
               />
+              {sliderMode ? (
+                <SliderControl
+                  ariaLabel="年次上昇率"
+                  value={Number(resident?.annualIncomeGrowthRate ?? 0)}
+                  min={0}
+                  max={0.1}
+                  step={0.005}
+                  fineStep={0.001}
+                  onChange={(next) =>
+                    setValue(`residents.${index}.annualIncomeGrowthRate` as const, clampNumber(next, 0, 0.2), {
+                      shouldDirty: true,
+                      shouldTouch: true,
+                    })
+                  }
+                  formatValue={(v) => `${Math.round(v * 1000) / 10}%`}
+                />
+              ) : null}
             </label>
           </div>
           <details open className="grid-span-all">
@@ -1547,13 +2102,16 @@ const ResidentCard = ({
                 </label>
                 <label>
                   金額
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    step={YEN_STEP}
-                    {...register(
-                      `residents.${index}.incomeEvents.${eventIndex}.amount` as const,
-                      { valueAsNumber: true },
+                  <Controller
+                    control={control}
+                    name={`residents.${index}.incomeEvents.${eventIndex}.amount` as const}
+                    render={({ field }) => (
+                      <YenInput
+                        value={field.value}
+                        ariaLabel="収入イベント金額"
+                        onChange={(next) => field.onChange(next)}
+                        onBlur={() => field.onBlur()}
+                      />
                     )}
                   />
                 </label>
@@ -1622,13 +2180,16 @@ const ResidentCard = ({
                 </label>
                 <label>
                   年間支出
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    step={YEN_STEP}
-                    {...register(
-                      `residents.${index}.expenseBands.${expenseIndex}.annualAmount` as const,
-                      { valueAsNumber: true },
+                  <Controller
+                    control={control}
+                    name={`residents.${index}.expenseBands.${expenseIndex}.annualAmount` as const}
+                    render={({ field }) => (
+                      <YenInput
+                        value={field.value}
+                        ariaLabel="年間支出"
+                        onChange={(next) => field.onChange(next)}
+                        onBlur={() => field.onBlur()}
+                      />
                     )}
                   />
                 </label>
