@@ -120,6 +120,13 @@ export const extractSnapshotFromLocation = (): Scenario[] | null => {
   if (!encoded) {
     return null
   }
+  try {
+    const url = new URL(window.location.origin + window.location.pathname)
+    url.hash = `s=${encoded}`
+    window.history.replaceState(null, '', url.toString())
+  } catch {
+    // ignore
+  }
   return decodeSnapshot(encoded)
 }
 
