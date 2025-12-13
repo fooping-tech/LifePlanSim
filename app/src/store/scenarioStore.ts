@@ -23,6 +23,7 @@ interface ScenarioStoreState {
   updateScenario: (scenario: Scenario) => void
   selectScenario: (id: string) => void
   loadScenarios: (scenarios: Scenario[]) => void
+  appendScenarios: (scenarios: Scenario[]) => void
   resetToSamples: () => void
   generateSnapshotLink: () => string
 }
@@ -164,6 +165,43 @@ const ensureScenarioDefaults = (scenario: Scenario): Scenario => {
   }
 }
 
+const normalizeScenarioForAppend = (scenario: Scenario, usedScenarioIds: Set<string>): Scenario => {
+  const cloned = JSON.parse(JSON.stringify(scenario)) as Scenario
+  const hasConflict = !cloned.id || usedScenarioIds.has(cloned.id)
+  if (hasConflict) {
+    cloned.id = createId('scenario')
+    cloned.name = cloned.name ? `${cloned.name} (インポート)` : 'インポートシナリオ'
+    if (cloned.residents?.length) {
+      cloned.residents = cloned.residents.map((resident) => ({
+        ...resident,
+        id: createId('resident'),
+        incomeEvents: (resident.incomeEvents ?? []).map((event) => ({ ...event, id: createId('event') })),
+        expenseBands: (resident.expenseBands ?? []).map((band) => ({ ...band, id: createId('expense') })),
+      }))
+    }
+    if (cloned.vehicles?.length) {
+      cloned.vehicles = cloned.vehicles.map((vehicle) => ({ ...vehicle, id: createId('vehicle') }))
+    }
+    if (cloned.housingPlans?.length) {
+      cloned.housingPlans = cloned.housingPlans.map((plan) => ({ ...plan, id: createId('housing') }))
+    }
+    if (cloned.livingPlans?.length) {
+      cloned.livingPlans = cloned.livingPlans.map((plan) => ({ ...plan, id: createId('living') }))
+    }
+    if (cloned.savingsAccounts?.length) {
+      cloned.savingsAccounts = cloned.savingsAccounts.map((account) => ({ ...account, id: createId('savings') }))
+    }
+    if (cloned.expenseBands?.length) {
+      cloned.expenseBands = cloned.expenseBands.map((band) => ({ ...band, id: createId('expense') }))
+    }
+    if (cloned.customIncomeEvents?.length) {
+      cloned.customIncomeEvents = cloned.customIncomeEvents.map((event) => ({ ...event, id: createId('event') }))
+    }
+  }
+  usedScenarioIds.add(cloned.id)
+  return ensureScenarioDefaults(cloned)
+}
+
 const recalc = (draft: Draft<ScenarioStoreState>) => {
   draft.scenarios = draft.scenarios.map((scenario) => ensureScenarioDefaults(scenario))
   draft.projections = draft.scenarios.map((scenario) => simulateScenario(scenario))
@@ -230,6 +268,14 @@ export const useScenarioStore = create<ScenarioStoreState>()(
       set((state) => {
         state.scenarios = scenarios.map((scenario) => ensureScenarioDefaults(scenario))
         state.activeScenarioId = state.scenarios[0]?.id ?? null
+        recalc(state)
+      }),
+    appendScenarios: (scenarios) =>
+      set((state) => {
+        const usedScenarioIds = new Set(state.scenarios.map((scenario) => scenario.id))
+        const appended = scenarios.map((scenario) => normalizeScenarioForAppend(scenario, usedScenarioIds))
+        state.scenarios.push(...appended)
+        state.activeScenarioId = state.activeScenarioId ?? state.scenarios[0]?.id ?? null
         recalc(state)
       }),
     resetToSamples: () =>

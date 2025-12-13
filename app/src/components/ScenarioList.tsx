@@ -6,6 +6,7 @@ import { downloadScenarioSet, readScenarioFile } from '@utils/persistence'
 export const ScenarioList = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [status, setStatus] = useState('')
+  const [importMode, setImportMode] = useState<'replace' | 'append'>('replace')
   const {
     scenarios,
     activeScenarioId,
@@ -14,6 +15,7 @@ export const ScenarioList = () => {
     duplicateScenario,
     removeScenario,
     loadScenarios,
+    appendScenarios,
     resetToSamples,
     generateSnapshotLink,
   } = useScenarioStore(
@@ -25,12 +27,19 @@ export const ScenarioList = () => {
       duplicateScenario: state.duplicateScenario,
       removeScenario: state.removeScenario,
       loadScenarios: state.loadScenarios,
+      appendScenarios: state.appendScenarios,
       resetToSamples: state.resetToSamples,
       generateSnapshotLink: state.generateSnapshotLink,
     })),
   )
 
-  const handleImportClick = () => {
+  const buildScenarioFileName = (name: string) => {
+    const base = name?.trim() ? `life-plan-scenario-${name.trim()}.json` : 'life-plan-scenario.json'
+    return base.replace(/[\\/:*?"<>|]/g, '_')
+  }
+
+  const handleImportClick = (mode: 'replace' | 'append') => {
+    setImportMode(mode)
     fileInputRef.current?.click()
   }
 
@@ -41,8 +50,17 @@ export const ScenarioList = () => {
     }
     try {
       const data = await readScenarioFile(file)
-      loadScenarios(data)
-      setStatus('JSONを読み込みました')
+      if (importMode === 'replace') {
+        const ok = window.confirm('現在のシナリオ一覧を置き換えます。よろしいですか？')
+        if (!ok) {
+          return
+        }
+        loadScenarios(data)
+        setStatus('JSONを読み込みました（置換）')
+      } else {
+        appendScenarios(data)
+        setStatus('JSONを読み込みました（追加）')
+      }
     } catch (error) {
       setStatus(`読込エラー: ${(error as Error).message}`)
     } finally {
@@ -111,11 +129,28 @@ export const ScenarioList = () => {
           ))}
         </ul>
         <div className="scenario-list__footer">
-          <button type="button" onClick={() => downloadScenarioSet(scenarios)}>
-            JSON書き出し
+          <button type="button" onClick={() => downloadScenarioSet(scenarios, 'life-plan-scenarios.json')}>
+            JSON書き出し(全件)
           </button>
-          <button type="button" onClick={handleImportClick}>
-            JSON読込
+          <button
+            type="button"
+            onClick={() => {
+              const active = scenarios.find((scenario) => scenario.id === activeScenarioId)
+              if (!active) {
+                setStatus('書き出し対象のシナリオが見つかりません')
+                return
+              }
+              downloadScenarioSet([active], buildScenarioFileName(active.name))
+              setStatus('JSONを書き出しました（選択中）')
+            }}
+          >
+            JSON書き出し(選択中)
+          </button>
+          <button type="button" onClick={() => handleImportClick('append')}>
+            JSON読込(追加)
+          </button>
+          <button type="button" onClick={() => handleImportClick('replace')}>
+            JSON読込(置換)
           </button>
           <button type="button" onClick={handleShare}>
             共有リンク

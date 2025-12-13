@@ -6,7 +6,13 @@ type RemoteBuildInfo = {
   builtAt?: string
 }
 
-const shortSha = (value: string | null | undefined) => (value ? value.slice(0, 7) : '')
+const shortSha = (value: string | null | undefined) => {
+  if (!value) {
+    return ''
+  }
+  const maybeSha = value.split('-').at(-1) ?? value
+  return maybeSha.slice(0, 7)
+}
 
 const buildLabel = (version: string, buildId: string | null) => {
   if (!buildId) {
@@ -68,4 +74,3 @@ export const useBuildInfo = () => {
     reload: () => window.location.reload(),
   }
 }
-

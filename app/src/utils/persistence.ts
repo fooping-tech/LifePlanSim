@@ -40,7 +40,10 @@ export const loadScenariosFromStorage = (): Scenario[] | null => {
   }
 }
 
-export const downloadScenarioSet = (scenarios: Scenario[]): void => {
+export const downloadScenarioSet = (
+  scenarios: Scenario[],
+  fileName: string = 'life-plan-scenarios.json',
+): void => {
   if (typeof document === 'undefined') {
     return
   }
@@ -50,7 +53,7 @@ export const downloadScenarioSet = (scenarios: Scenario[]): void => {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = 'life-plan-scenarios.json'
+  link.download = fileName
   link.click()
   setTimeout(() => URL.revokeObjectURL(url), 0)
 }

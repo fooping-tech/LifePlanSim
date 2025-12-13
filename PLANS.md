@@ -15,6 +15,7 @@ Deliver a browser-based interactive simulator that lets households model long-te
 - [x] (2025-02-15 05:10Z) Delivered vehicle preset data/hook/dialog and wired it into the 車一覧セクション so users can add loan or一括モデル instantly.
 - [x] (2025-02-15 05:45Z) Added savings preset catalog/hook/dialog and connected it to the 貯蓄口座一覧セクション for rapid口座追加.
 - [x] (2025-02-15 06:05Z) Expanded resident presets with child education patterns (私立小〜大学院、下宿含む) to accelerate dependent setup.
+- [x] (2025-12-13) Expanded JSON import/export flows with scenario-level export plus append/replace imports.
 
 ## Surprises & Discoveries
 
@@ -134,6 +135,12 @@ Milestone 4 (Validation & UX refinements) adds guardrails: highlight years where
       - Option B (no extra file): poll `ETag`/`Last-Modified` of `index.html` (may be cache/CDN dependent) and prompt reload when changed.
     - For GitHub Pages caching behavior, recommend a “hard refresh” button that calls `location.reload()` and optionally clears Service Worker caches if introduced later.
     - Keep the feature dependency-free; implement as a small `useBuildInfo()` hook + topbar UI badge.
+24. Expand JSON import/export workflows (scenario-level and full set):
+    - Add “シナリオ単位のJSON書き出し”: export only the currently selected scenario as a single-element `Scenario[]` (or optionally `Scenario`), to simplify sharing/editing one plan.
+    - Add “シナリオ単位のJSON読み込み（追記）”: import a JSON file and append scenarios to the existing list (dedupe by `id` with auto-regeneration if conflicts, or prompt to overwrite).
+    - Keep “全シナリオ一覧のJSON書き出し”: current `downloadScenarioSet(scenarios)` remains, but ensure the UI label clarifies “全件”.
+    - Keep “全シナリオ一覧のJSON読み込み（置換）”: current load flow replaces scenarios; make this explicit in UI and optionally add a confirmation dialog.
+    - Validation rules: accept both `Scenario[]` and legacy `{scenarios: Scenario[]}`; normalize defaults via `ensureScenarioDefaults` after import; handle malformed files with a user-friendly error.
 
 ## Validation and Acceptance
 
