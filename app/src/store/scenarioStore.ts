@@ -40,14 +40,119 @@ const bootstrapScenarios = (): Scenario[] => {
 }
 
 const ensureScenarioDefaults = (scenario: Scenario): Scenario => {
+  const normalizedHousingPlans = (() => {
+    if (scenario.housingPlans?.length) {
+      return scenario.housingPlans.map((plan) => {
+        if (plan.type === 'rent') {
+          return {
+            id: plan.id ?? createId('housing'),
+            label: plan.label ?? '賃貸',
+            type: 'rent' as const,
+            startYearOffset: plan.startYearOffset ?? 0,
+            endYearOffset: plan.endYearOffset,
+            monthlyRent: plan.monthlyRent ?? 0,
+            monthlyFees: plan.monthlyFees ?? 0,
+            extraAnnualCosts: plan.extraAnnualCosts ?? 0,
+            moveInCost: plan.moveInCost ?? 0,
+            moveOutCost: plan.moveOutCost ?? 0,
+          }
+        }
+        return {
+          id: plan.id ?? createId('housing'),
+          label: plan.label ?? '住宅',
+          type: 'own' as const,
+          startYearOffset: plan.startYearOffset ?? 0,
+          endYearOffset: plan.endYearOffset,
+          builtYear: plan.builtYear ?? 0,
+          mortgageRemaining: plan.mortgageRemaining ?? 0,
+          monthlyMortgage: plan.monthlyMortgage ?? 0,
+          managementFeeMonthly: plan.managementFeeMonthly ?? 0,
+          maintenanceReserveMonthly: plan.maintenanceReserveMonthly ?? 0,
+          extraAnnualCosts: plan.extraAnnualCosts ?? 0,
+          purchaseCost: plan.purchaseCost ?? 0,
+          saleValue: plan.saleValue ?? 0,
+        }
+      })
+    }
+    if (scenario.housing) {
+      return [
+        {
+          id: createId('housing'),
+          label: '住宅',
+          type: 'own' as const,
+          startYearOffset: 0,
+          endYearOffset: undefined,
+          builtYear: scenario.housing.builtYear ?? 0,
+          mortgageRemaining: scenario.housing.mortgageRemaining ?? 0,
+          monthlyMortgage: scenario.housing.monthlyMortgage ?? 0,
+          managementFeeMonthly: scenario.housing.managementFeeMonthly ?? 0,
+          maintenanceReserveMonthly: scenario.housing.maintenanceReserveMonthly ?? 0,
+          extraAnnualCosts: scenario.housing.extraAnnualCosts ?? 0,
+          purchaseCost: 0,
+          saleValue: 0,
+        },
+      ]
+    }
+    return []
+  })()
+
+  const normalizedLivingPlans = (() => {
+    if (scenario.livingPlans?.length) {
+      return scenario.livingPlans.map((plan) => ({
+        id: plan.id ?? createId('living'),
+        label: plan.label ?? '生活費',
+        startYearOffset: plan.startYearOffset ?? 0,
+        endYearOffset: plan.endYearOffset,
+        baseAnnual: plan.baseAnnual ?? 0,
+        insuranceAnnual: plan.insuranceAnnual ?? 0,
+        utilitiesAnnual: plan.utilitiesAnnual ?? 0,
+        discretionaryAnnual: plan.discretionaryAnnual ?? 0,
+        healthcareAnnual: plan.healthcareAnnual ?? 0,
+        inflationRate: plan.inflationRate,
+      }))
+    }
+    if (scenario.living) {
+      return [
+        {
+          id: createId('living'),
+          label: '生活費',
+          startYearOffset: 0,
+          endYearOffset: undefined,
+          baseAnnual: scenario.living.baseAnnual ?? 0,
+          insuranceAnnual: scenario.living.insuranceAnnual ?? 0,
+          utilitiesAnnual: scenario.living.utilitiesAnnual ?? 0,
+          discretionaryAnnual: scenario.living.discretionaryAnnual ?? 0,
+          healthcareAnnual: scenario.living.healthcareAnnual ?? 0,
+          inflationRate: scenario.living.inflationRate,
+        },
+      ]
+    }
+    return [
+      {
+        id: createId('living'),
+        label: '生活費',
+        startYearOffset: 0,
+        endYearOffset: undefined,
+        baseAnnual: 0,
+        insuranceAnnual: 0,
+        utilitiesAnnual: 0,
+        discretionaryAnnual: 0,
+        healthcareAnnual: 0,
+        inflationRate: undefined,
+      },
+    ]
+  })()
+
   return {
     currency: 'JPY',
     expenseBands: [],
     customIncomeEvents: [],
     vehicles: [],
     ...scenario,
+    housingPlans: normalizedHousingPlans,
     residents: scenario.residents ?? [],
     savingsAccounts: scenario.savingsAccounts ?? [],
+    livingPlans: normalizedLivingPlans,
     living: {
       baseAnnual: scenario.living?.baseAnnual ?? 0,
       insuranceAnnual: scenario.living?.insuranceAnnual,

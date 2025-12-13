@@ -1,0 +1,41 @@
+[
+  {
+    "id": "standard-family",
+    "title": "標準（ファミリー）",
+    "description": "食費・日用品・光熱・保険を含む標準的な生活費モデル",
+    "monthly": {
+      "base": 230000,
+      "insurance": 35000,
+      "utilities": 35000,
+      "discretionary": 25000,
+      "healthcare": 15000
+    },
+    "inflationRate": 0.012
+  },
+  {
+    "id": "compact",
+    "title": "節約（コンパクト）",
+    "description": "固定費を抑えた生活費モデル",
+    "monthly": {
+      "base": 180000,
+      "insurance": 25000,
+      "utilities": 25000,
+      "discretionary": 15000,
+      "healthcare": 10000
+    },
+    "inflationRate": 0.01
+  },
+  {
+    "id": "generous",
+    "title": "ゆとり（高め）",
+    "description": "生活のゆとり・医療や保険を手厚く見込むモデル",
+    "monthly": {
+      "base": 300000,
+      "insurance": 50000,
+      "utilities": 45000,
+      "discretionary": 50000,
+      "healthcare": 25000
+    },
+    "inflationRate": 0.015
+  }
+]

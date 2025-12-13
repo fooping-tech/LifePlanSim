@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import {
   EDUCATION_STAGE_OPTIONS,
   type EducationPresetStage,

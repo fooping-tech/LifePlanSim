@@ -1,0 +1,44 @@
+[
+  {
+    "id": "cash-buffer",
+    "title": "生活防衛資金（普通預金）",
+    "description": "当座費用6か月分を預金で確保するテンプレート。",
+    "account": {
+      "label": "普通預金",
+      "type": "deposit",
+      "balance": 1500000,
+      "annualContribution": 300000,
+      "annualInterestRate": 0.001,
+      "adjustable": true,
+      "withdrawPriority": 1
+    }
+  },
+  {
+    "id": "tsumitate-nisa",
+    "title": "積立NISA (インデックス投資)",
+    "description": "年間80万円を20年間積立てる長期投資モデル。",
+    "account": {
+      "label": "積立NISA",
+      "type": "investment",
+      "balance": 500000,
+      "annualContribution": 800000,
+      "annualInterestRate": 0.05,
+      "adjustable": false,
+      "withdrawPriority": 3
+    }
+  },
+  {
+    "id": "education-fund",
+    "title": "教育資金（学資保険代替）",
+    "description": "子ども大学進学に合わせて積立てる専用口座。",
+    "account": {
+      "label": "教育資金ファンド",
+      "type": "investment",
+      "balance": 1000000,
+      "annualContribution": 600000,
+      "annualInterestRate": 0.035,
+      "adjustable": true,
+      "withdrawPriority": 2
+    }
+  }
+]

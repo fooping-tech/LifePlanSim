@@ -2,7 +2,23 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFieldArray, useForm, useWatch } from 'react-hook-form'
 import type { Control, UseFormRegister } from 'react-hook-form'
 import type { Scenario } from '@models/scenario'
+import type { Resident } from '@models/resident'
+import type { HousingPlan, LivingPlan, SavingsAccount, VehicleProfile } from '@models/finance'
 import { EducationPresetDialog } from '@components/EducationPresetDialog'
+import { ResidentPresetDialog } from '@components/ResidentPresetDialog'
+import { HousingPresetDialog } from '@components/HousingPresetDialog'
+import { VehiclePresetDialog } from '@components/VehiclePresetDialog'
+import { SavingsPresetDialog } from '@components/SavingsPresetDialog'
+import { LivingPresetDialog } from '@components/LivingPresetDialog'
+import {
+  IconCalendar,
+  IconCar,
+  IconHeartPulse,
+  IconHome,
+  IconSettings,
+  IconUsers,
+  IconWallet,
+} from '@components/icons'
 import type { EducationPresetBandTemplate } from '@hooks/useEducationPresets'
 import { useScenarioStore } from '@store/scenarioStore'
 import { createBlankScenario } from '@utils/sampleData'
@@ -10,6 +26,14 @@ import { createId } from '@utils/id'
 import { useDebouncedCallback } from '@utils/useDebouncedCallback'
 
 const YEN_STEP = 10000
+const formatManYen = (value: number, digits = 1) =>
+  new Intl.NumberFormat('ja-JP', { maximumFractionDigits: digits }).format(value / 10_000)
+
+const formatManYenMonthlyAnnual = (annualYen: number): string => {
+  const annual = Number.isFinite(annualYen) ? annualYen : 0
+  const monthly = annual / 12
+  return `月額${formatManYen(monthly, 1)}万(年額${formatManYen(annual, 0)}万)`
+}
 
 export const ScenarioForm = () => {
   const scenario = useScenarioStore((state) =>
@@ -67,6 +91,26 @@ export const ScenarioForm = () => {
   })
 
   const {
+    fields: livingFields,
+    append: appendLivingPlan,
+    remove: removeLivingPlan,
+  } = useFieldArray({
+    control,
+    name: 'livingPlans',
+    keyName: 'fieldKey',
+  })
+
+  const {
+    fields: housingFields,
+    append: appendHousingPlan,
+    remove: removeHousingPlan,
+  } = useFieldArray({
+    control,
+    name: 'housingPlans',
+    keyName: 'fieldKey',
+  })
+
+  const {
     fields: savingsFields,
     append: appendSavings,
     remove: removeSavings,
@@ -88,6 +132,21 @@ export const ScenarioForm = () => {
 
   const [collapsedMap, setCollapsedMap] = useState<Record<string, boolean>>({})
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const [residentPresetOpen, setResidentPresetOpen] = useState(false)
+  const [housingPresetOpen, setHousingPresetOpen] = useState(false)
+  const [vehiclePresetOpen, setVehiclePresetOpen] = useState(false)
+  const [livingPresetOpen, setLivingPresetOpen] = useState(false)
+  const [livingPresetTargetIndex, setLivingPresetTargetIndex] = useState<number | null>(null)
+  const [savingsPresetOpen, setSavingsPresetOpen] = useState(false)
+  const [compactMode, setCompactMode] = useState(true)
+  const [reducedColorMode, setReducedColorMode] = useState(false)
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return
+    }
+    document.body.classList.toggle('reduced-color', reducedColorMode)
+  }, [reducedColorMode])
 
   if (!scenario) {
     return (
@@ -95,6 +154,180 @@ export const ScenarioForm = () => {
         <p>シナリオを選択してください。</p>
       </section>
     )
+  }
+
+  const handleApplyResidentPreset = (presetResident: Resident) => {
+    appendResident({
+      ...presetResident,
+      id: createId('resident'),
+      incomeEvents: presetResident.incomeEvents?.map((event) => ({
+        ...event,
+        id: createId('event'),
+      })) ?? [],
+      expenseBands: presetResident.expenseBands?.map((band) => ({
+        ...band,
+        id: createId('expense'),
+      })) ?? [],
+    })
+  }
+
+  const handleApplyVehiclePreset = (profile: VehicleProfile) => {
+    appendVehicle({
+      id: createId('vehicle'),
+      label: profile.label,
+      purchaseYear: profile.purchaseYear,
+      purchasePrice: profile.purchasePrice,
+      disposalYear: profile.disposalYear,
+      disposalValue: profile.disposalValue,
+      loanRemaining: profile.loanRemaining,
+      monthlyLoan: profile.monthlyLoan,
+      inspectionCycleYears: profile.inspectionCycleYears,
+      inspectionCost: profile.inspectionCost,
+      maintenanceAnnual: profile.maintenanceAnnual,
+      parkingMonthly: profile.parkingMonthly,
+      insuranceAnnual: profile.insuranceAnnual,
+    })
+  }
+
+  const handleApplySavingsPreset = (account: SavingsAccount) => {
+    appendSavings({
+      ...account,
+      id: createId('savings'),
+    })
+  }
+
+  const handleApplyHousingPreset = (plan: Omit<HousingPlan, 'id'>) => {
+    appendHousingPlan({
+      ...plan,
+      id: createId('housing'),
+    } as HousingPlan)
+  }
+
+  const scenarioValues = watchedValues as Scenario
+  const livingPlans = (scenarioValues.livingPlans ?? []) as LivingPlan[]
+  const getSectionSummary = (sectionId: string): string | null => {
+    switch (sectionId) {
+      case 'basic-info': {
+        const startYear = scenarioValues.startYear
+        const horizonYears = scenarioValues.horizonYears
+        if (typeof startYear === 'number' && typeof horizonYears === 'number') {
+          return `開始 ${startYear} / ${horizonYears}年`
+        }
+        if (typeof startYear === 'number') {
+          return `開始 ${startYear}`
+        }
+        return null
+      }
+      case 'residents-list': {
+        const residents = scenarioValues.residents ?? []
+        if (!residents.length) {
+          return null
+        }
+        const total = residents.reduce((sum, resident) => sum + (resident.baseNetIncome ?? 0), 0)
+        return `${residents.length}人 / 手取り${formatManYen(total, 0)}万/年`
+      }
+      case 'housing-costs': {
+        const plans = scenarioValues.housingPlans ?? []
+        if (!plans.length) {
+          return null
+        }
+        const active = plans
+          .filter((plan) => plan.startYearOffset <= 0 && (plan.endYearOffset == null || 0 <= plan.endYearOffset))
+          .sort((a, b) => b.startYearOffset - a.startYearOffset)[0]
+        if (!active) {
+          return `${plans.length}件`
+        }
+        const annual =
+          active.type === 'rent'
+            ? active.monthlyRent * 12 + (active.monthlyFees ?? 0) * 12 + (active.extraAnnualCosts ?? 0)
+            : active.monthlyMortgage * 12 +
+              active.managementFeeMonthly * 12 +
+              active.maintenanceReserveMonthly * 12 +
+              (active.extraAnnualCosts ?? 0)
+        const suffix = plans.length > 1 ? `・${plans.length}件` : ''
+        return `${formatManYenMonthlyAnnual(annual)}${suffix}`
+      }
+      case 'vehicle-list': {
+        const vehicles = scenarioValues.vehicles ?? []
+        if (!vehicles.length) {
+          return null
+        }
+        const annual = vehicles.reduce((sum, vehicle) => {
+          const monthly = (vehicle.monthlyLoan ?? 0) + (vehicle.parkingMonthly ?? 0)
+          const yearlyInspection =
+            vehicle.inspectionCycleYears && vehicle.inspectionCycleYears > 0
+              ? (vehicle.inspectionCost ?? 0) / vehicle.inspectionCycleYears
+              : 0
+          return (
+            sum +
+            monthly * 12 +
+            (vehicle.maintenanceAnnual ?? 0) +
+            (vehicle.insuranceAnnual ?? 0) +
+            yearlyInspection
+          )
+        }, 0)
+        return `${formatManYenMonthlyAnnual(annual)}・${vehicles.length}台`
+      }
+      case 'living-costs': {
+        if (!livingPlans.length) {
+          return null
+        }
+        const active = livingPlans
+          .filter((plan) => plan.startYearOffset <= 0 && (plan.endYearOffset == null || 0 <= plan.endYearOffset))
+          .sort((a, b) => b.startYearOffset - a.startYearOffset)[0]
+        if (!active) {
+          return `${livingPlans.length}件`
+        }
+        const annual =
+          (active.baseAnnual ?? 0) +
+          (active.insuranceAnnual ?? 0) +
+          (active.utilitiesAnnual ?? 0) +
+          (active.discretionaryAnnual ?? 0) +
+          (active.healthcareAnnual ?? 0)
+        const suffix = livingPlans.length > 1 ? `・${livingPlans.length}件` : ''
+        return annual ? `${formatManYenMonthlyAnnual(annual)}${suffix}` : `${formatManYenMonthlyAnnual(0)}${suffix}`
+      }
+      case 'savings-list': {
+        const accounts = scenarioValues.savingsAccounts ?? []
+        if (!accounts.length) {
+          return null
+        }
+        const annual = accounts.reduce((sum, account) => sum + (account.annualContribution ?? 0), 0)
+        const suffix = accounts.length > 1 ? `・${accounts.length}` : ''
+        return `${formatManYenMonthlyAnnual(annual)}${suffix}`
+      }
+      case 'event-list': {
+        const bands = scenarioValues.expenseBands ?? []
+        if (!bands.length) {
+          return null
+        }
+        const annual = bands.reduce((sum, band) => sum + (band.annualAmount ?? 0), 0)
+        return `${bands.length}件 / 年額${formatManYen(annual)}万`
+      }
+      default:
+        return null
+    }
+  }
+
+  const getSectionDecor = (sectionId: string) => {
+    switch (sectionId) {
+      case 'basic-info':
+        return { className: 'collapsible-section--basic', icon: <IconSettings className="section-icon" aria-hidden /> }
+      case 'residents-list':
+        return { className: 'collapsible-section--residents', icon: <IconUsers className="section-icon" aria-hidden /> }
+      case 'housing-costs':
+        return { className: 'collapsible-section--housing', icon: <IconHome className="section-icon" aria-hidden /> }
+      case 'vehicle-list':
+        return { className: 'collapsible-section--vehicle', icon: <IconCar className="section-icon" aria-hidden /> }
+      case 'living-costs':
+        return { className: 'collapsible-section--living', icon: <IconHeartPulse className="section-icon" aria-hidden /> }
+      case 'savings-list':
+        return { className: 'collapsible-section--savings', icon: <IconWallet className="section-icon" aria-hidden /> }
+      case 'event-list':
+        return { className: 'collapsible-section--events', icon: <IconCalendar className="section-icon" aria-hidden /> }
+      default:
+        return { className: '', icon: null }
+    }
   }
 
   const sections: { id: string; label: string; content: React.ReactNode }[] = [
@@ -144,23 +377,28 @@ export const ScenarioForm = () => {
               />
             )
           })}
-          <button
-            type="button"
-            onClick={() =>
-              appendResident({
-                id: createId('resident'),
-                name: '新しい住人',
-                currentAge: 35,
-                retirementAge: 65,
-                baseNetIncome: 5000000,
-                annualIncomeGrowthRate: 0.02,
-                incomeEvents: [],
-                expenseBands: [],
-              })
-            }
-          >
-            + 住人を追加
-          </button>
+          <div className="action-row">
+            <button type="button" onClick={() => setResidentPresetOpen(true)}>
+              プリセットから追加
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                appendResident({
+                  id: createId('resident'),
+                  name: '新しい住人',
+                  currentAge: 35,
+                  retirementAge: 65,
+                  baseNetIncome: 5000000,
+                  annualIncomeGrowthRate: 0.02,
+                  incomeEvents: [],
+                  expenseBands: [],
+                })
+              }
+            >
+              + 住人を追加
+            </button>
+          </div>
         </div>
       ),
     },
@@ -168,52 +406,263 @@ export const ScenarioForm = () => {
       id: 'housing-costs',
       label: '住宅コスト',
       content: (
-        <div className="form-section form-section--grid">
-          <label>
-            ローン残額
-            <input
-              type="number"
-              inputMode="numeric"
-              step={YEN_STEP}
-              {...register('housing.mortgageRemaining', { valueAsNumber: true })}
-            />
-          </label>
-          <label>
-            月々のローン
-            <input
-              type="number"
-              inputMode="numeric"
-              step={YEN_STEP}
-              {...register('housing.monthlyMortgage', { valueAsNumber: true })}
-            />
-          </label>
-          <label>
-            管理費（月額）
-            <input
-              type="number"
-              inputMode="numeric"
-              step={YEN_STEP}
-              {...register('housing.managementFeeMonthly', { valueAsNumber: true })}
-            />
-          </label>
-          <label>
-            修繕積立（月額）
-            <input
-              type="number"
-              inputMode="numeric"
-              step={YEN_STEP}
-              {...register('housing.maintenanceReserveMonthly', { valueAsNumber: true })}
-            />
-          </label>
-          <label>
-            その他年間費用
-            <input
-              type="number"
-              inputMode="numeric"
-              step={YEN_STEP}
-              {...register('housing.extraAnnualCosts', { valueAsNumber: true })}
-            />
-          </label>
+        <div className="form-section">
+          {housingFields.map((field, index) => {
+            const entityId = (field as { id?: string }).id ?? (field as { fieldKey?: string }).fieldKey
+            const cardKey = `housing-${entityId ?? index}`
+            const collapsed = collapsedMap[cardKey] ?? false
+            const type = (watchedValues.housingPlans?.[index] as HousingPlan | undefined)?.type ?? 'own'
+
+            return (
+              <div key={field.fieldKey ?? entityId ?? index} className="card collapsible-card">
+                <div className="collapsible-card__header">
+                  <button
+                    type="button"
+                    className="collapsible-subheader"
+                    onClick={() =>
+                      setCollapsedMap((prev) => ({
+                        ...prev,
+                        [cardKey]: !collapsed,
+                      }))
+                    }
+                  >
+                    <span>住居 {index + 1}</span>
+                    <span className="collapse-icon">{collapsed ? '+' : '−'}</span>
+                  </button>
+                  <button type="button" className="link-button" onClick={() => removeHousingPlan(index)}>
+                    削除
+                  </button>
+                </div>
+                {!collapsed ? (
+                  <div className="collapsible-card__body form-section--grid">
+                    <label>
+                      名称
+                      <input {...register(`housingPlans.${index}.label` as const)} />
+                    </label>
+                    <label>
+                      種別
+                      <select
+                        {...register(`housingPlans.${index}.type` as const)}
+                        onChange={(event) => {
+                          const nextType = event.target.value as HousingPlan['type']
+                          form.setValue(`housingPlans.${index}.type` as const, nextType, {
+                            shouldDirty: true,
+                            shouldTouch: true,
+                          })
+                          if (nextType === 'rent') {
+                            form.setValue(`housingPlans.${index}.monthlyRent` as const, 120000, {
+                              shouldDirty: true,
+                            })
+                            form.setValue(`housingPlans.${index}.monthlyFees` as const, 0, {
+                              shouldDirty: true,
+                            })
+                          } else {
+                            form.setValue(`housingPlans.${index}.mortgageRemaining` as const, 0, {
+                              shouldDirty: true,
+                            })
+                            form.setValue(`housingPlans.${index}.monthlyMortgage` as const, 0, {
+                              shouldDirty: true,
+                            })
+                            form.setValue(`housingPlans.${index}.managementFeeMonthly` as const, 0, {
+                              shouldDirty: true,
+                            })
+                            form.setValue(`housingPlans.${index}.maintenanceReserveMonthly` as const, 0, {
+                              shouldDirty: true,
+                            })
+                            form.setValue(`housingPlans.${index}.builtYear` as const, new Date().getFullYear(), {
+                              shouldDirty: true,
+                            })
+                          }
+                        }}
+                      >
+                        <option value="own">持ち家</option>
+                        <option value="rent">賃貸（アパート等）</option>
+                      </select>
+                    </label>
+                    <label>
+                      開始（年オフセット）
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        {...register(`housingPlans.${index}.startYearOffset` as const, { valueAsNumber: true })}
+                      />
+                    </label>
+                    <label>
+                      終了（年オフセット）
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        {...register(`housingPlans.${index}.endYearOffset` as const, {
+                          setValueAs: (value) => (value === '' || value === null ? undefined : Number(value)),
+                        })}
+                      />
+                    </label>
+
+                    {type === 'rent' ? (
+                      <>
+                        <label>
+                          家賃（月額）
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            step={YEN_STEP}
+                            {...register(`housingPlans.${index}.monthlyRent` as const, { valueAsNumber: true })}
+                          />
+                        </label>
+                        <label>
+                          共益費など（月額）
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            step={YEN_STEP}
+                            {...register(`housingPlans.${index}.monthlyFees` as const, { valueAsNumber: true })}
+                          />
+                        </label>
+                        <details className="grid-span-all">
+                          <summary>詳細</summary>
+                          <div className="inline-card">
+                            <label>
+                              入居費用（初年度のみ）
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                step={YEN_STEP}
+                                {...register(`housingPlans.${index}.moveInCost` as const, { valueAsNumber: true })}
+                              />
+                            </label>
+                            <label>
+                              退去費用（終了年のみ）
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                step={YEN_STEP}
+                                {...register(`housingPlans.${index}.moveOutCost` as const, { valueAsNumber: true })}
+                              />
+                            </label>
+                            <label>
+                              その他年間費用
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                step={YEN_STEP}
+                                {...register(`housingPlans.${index}.extraAnnualCosts` as const, { valueAsNumber: true })}
+                              />
+                            </label>
+                          </div>
+                        </details>
+                      </>
+                    ) : (
+                      <>
+                        <label>
+                          築年
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            {...register(`housingPlans.${index}.builtYear` as const, { valueAsNumber: true })}
+                          />
+                        </label>
+                        <label>
+                          ローン残額
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            step={YEN_STEP}
+                            {...register(`housingPlans.${index}.mortgageRemaining` as const, { valueAsNumber: true })}
+                          />
+                        </label>
+                        <label>
+                          月々のローン
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            step={YEN_STEP}
+                            {...register(`housingPlans.${index}.monthlyMortgage` as const, { valueAsNumber: true })}
+                          />
+                        </label>
+                        <label>
+                          管理費（月額）
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            step={YEN_STEP}
+                            {...register(`housingPlans.${index}.managementFeeMonthly` as const, { valueAsNumber: true })}
+                          />
+                        </label>
+                        <label>
+                          修繕積立（月額）
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            step={YEN_STEP}
+                            {...register(`housingPlans.${index}.maintenanceReserveMonthly` as const, { valueAsNumber: true })}
+                          />
+                        </label>
+                        <details className="grid-span-all">
+                          <summary>詳細</summary>
+                          <div className="inline-card">
+                            <label>
+                              購入費用（開始年のみ）
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                step={YEN_STEP}
+                                {...register(`housingPlans.${index}.purchaseCost` as const, { valueAsNumber: true })}
+                              />
+                            </label>
+                            <label>
+                              売却額（終了年のみ）
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                step={YEN_STEP}
+                                {...register(`housingPlans.${index}.saleValue` as const, { valueAsNumber: true })}
+                              />
+                            </label>
+                            <label>
+                              その他年間費用
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                step={YEN_STEP}
+                                {...register(`housingPlans.${index}.extraAnnualCosts` as const, { valueAsNumber: true })}
+                              />
+                            </label>
+                          </div>
+                        </details>
+                      </>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            )
+          })}
+
+          <div className="action-row">
+            <button type="button" onClick={() => setHousingPresetOpen(true)}>
+              プリセットから追加
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                appendHousingPlan({
+                  id: createId('housing'),
+                  label: '住居',
+                  type: 'own',
+                  startYearOffset: 0,
+                  builtYear: new Date().getFullYear(),
+                  mortgageRemaining: 0,
+                  monthlyMortgage: 0,
+                  managementFeeMonthly: 0,
+                  maintenanceReserveMonthly: 0,
+                  extraAnnualCosts: 0,
+                  purchaseCost: 0,
+                  saleValue: 0,
+                })
+              }
+            >
+              + 住居を追加
+            </button>
+          </div>
         </div>
       ),
     },
@@ -221,7 +670,7 @@ export const ScenarioForm = () => {
       id: 'vehicle-list',
       label: '車一覧',
       content: (
-        <div className="form-section form-section--grid">
+        <div className="form-section">
           {vehicleFields.map((field, index) => {
             const entityId = (field as { id?: string }).id ?? (field as { fieldKey?: string }).fieldKey
             const cardKey = `vehicle-${entityId ?? index}`
@@ -247,10 +696,30 @@ export const ScenarioForm = () => {
                   </button>
                 </div>
                 {!collapsed ? (
-                  <div className="collapsible-card__body">
+                  <div className="collapsible-card__body form-section--grid">
                     <label>
                       名称
                       <input {...register(`vehicles.${index}.label` as const)} />
+                    </label>
+                    <label>
+                      購入年
+                      <input
+                        type="number"
+                        {...register(`vehicles.${index}.purchaseYear` as const, {
+                          valueAsNumber: true,
+                        })}
+                      />
+                    </label>
+                    <label>
+                      購入額（一括）
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        step={YEN_STEP}
+                        {...register(`vehicles.${index}.purchasePrice` as const, {
+                          valueAsNumber: true,
+                        })}
+                      />
                     </label>
                     <label>
                       ローン残額
@@ -327,30 +796,58 @@ export const ScenarioForm = () => {
                         })}
                       />
                     </label>
+                    <label>
+                      売却/廃棄年
+                      <input
+                        type="number"
+                        {...register(`vehicles.${index}.disposalYear` as const, {
+                          valueAsNumber: true,
+                        })}
+                      />
+                    </label>
+                    <label>
+                      売却額
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        step={YEN_STEP}
+                        {...register(`vehicles.${index}.disposalValue` as const, {
+                          valueAsNumber: true,
+                        })}
+                      />
+                    </label>
                   </div>
                 ) : null}
               </div>
             )
           })}
-          <button
-            type="button"
-            onClick={() =>
-              appendVehicle({
-                id: createId('vehicle'),
-                label: '新しい車',
-                loanRemaining: 0,
-                monthlyLoan: 0,
-                inspectionCycleYears: 2,
-                inspectionCost: 100000,
-                maintenanceAnnual: 60000,
-                parkingMonthly: 0,
-                insuranceAnnual: 60000,
-                purchasePrice: 0,
-              })
-            }
-          >
-            + 車を追加
-          </button>
+          <div className="action-row">
+            <button type="button" onClick={() => setVehiclePresetOpen(true)}>
+              プリセットから追加
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                appendVehicle({
+                  id: createId('vehicle'),
+                  label: '新しい車',
+                  purchaseYear: new Date().getFullYear(),
+                  disposalYear: undefined,
+                  disposalValue: 0,
+                  loanRemaining: 0,
+                  monthlyLoan: 0,
+                  inspectionCycleYears: 2,
+                  inspectionCost: 100000,
+                  maintenanceAnnual: 60000,
+                  parkingMonthly: 0,
+                  insuranceAnnual: 60000,
+                  purchasePrice: 0,
+                })
+              }
+            >
+              + 車を追加
+            </button>
+          </div>
         </div>
       ),
     },
@@ -358,61 +855,184 @@ export const ScenarioForm = () => {
       id: 'living-costs',
       label: '生活費',
       content: (
-        <div className="form-section form-section--grid">
-          <label>
-            基本生活費（年）
-            <input
-              type="number"
-              inputMode="numeric"
-              step={YEN_STEP}
-              {...register('living.baseAnnual', { valueAsNumber: true })}
-            />
-          </label>
-          <label>
-            保険（年）
-            <input
-              type="number"
-              inputMode="numeric"
-              step={YEN_STEP}
-              {...register('living.insuranceAnnual', { valueAsNumber: true })}
-            />
-          </label>
-          <label>
-            光熱費（年）
-            <input
-              type="number"
-              inputMode="numeric"
-              step={YEN_STEP}
-              {...register('living.utilitiesAnnual', { valueAsNumber: true })}
-            />
-          </label>
-          <label>
-            自由費（年）
-            <input
-              type="number"
-              inputMode="numeric"
-              step={YEN_STEP}
-              {...register('living.discretionaryAnnual', { valueAsNumber: true })}
-            />
-          </label>
-          <label>
-            医療費（年）
-            <input
-              type="number"
-              inputMode="numeric"
-              step={YEN_STEP}
-              {...register('living.healthcareAnnual', { valueAsNumber: true })}
-            />
-          </label>
-          <label>
-            物価上昇率
-            <input
-              type="number"
-              step="0.01"
-              inputMode="decimal"
-              {...register('living.inflationRate', { valueAsNumber: true })}
-            />
-          </label>
+        <div className="form-section">
+          {livingFields.map((field, index) => {
+            const entityId = (field as { id?: string }).id ?? (field as { fieldKey?: string }).fieldKey
+            const cardKey = `living-${entityId ?? index}`
+            const collapsed = collapsedMap[cardKey] ?? false
+            const plan = livingPlans[index]
+            return (
+              <div key={field.fieldKey ?? entityId ?? index} className="card collapsible-card">
+                <div className="collapsible-card__header">
+                  <button
+                    type="button"
+                    className="collapsible-subheader"
+                    onClick={() =>
+                      setCollapsedMap((prev) => ({
+                        ...prev,
+                        [cardKey]: !collapsed,
+                      }))
+                    }
+                  >
+                    <span>{plan?.label || `生活費 ${index + 1}`}</span>
+                    <span className="collapse-icon">{collapsed ? '+' : '−'}</span>
+                  </button>
+                  <button type="button" className="link-button" onClick={() => removeLivingPlan(index)}>
+                    削除
+                  </button>
+                </div>
+                {!collapsed ? (
+                  <div className="collapsible-card__body form-section--grid">
+                    <label>
+                      名称
+                      <input {...register(`livingPlans.${index}.label` as const)} />
+                    </label>
+                    <label>
+                      開始（年オフセット）
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        {...register(`livingPlans.${index}.startYearOffset` as const, { valueAsNumber: true })}
+                      />
+                    </label>
+                    <label>
+                      終了（年オフセット）
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        {...register(`livingPlans.${index}.endYearOffset` as const, {
+                          setValueAs: (value) => (value === '' || value === null ? undefined : Number(value)),
+                        })}
+                      />
+                    </label>
+                    <label>
+                      基本生活費（月）
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        step={1000}
+                        value={Math.round(((plan?.baseAnnual ?? 0) as number) / 12)}
+                        onChange={(event) => {
+                          const nextMonthly = Number(event.target.value || 0)
+                          form.setValue(`livingPlans.${index}.baseAnnual` as const, nextMonthly * 12, {
+                            shouldDirty: true,
+                            shouldTouch: true,
+                          })
+                        }}
+                      />
+                    </label>
+                    <label>
+                      保険（月）
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        step={1000}
+                        value={Math.round(((plan?.insuranceAnnual ?? 0) as number) / 12)}
+                        onChange={(event) => {
+                          const nextMonthly = Number(event.target.value || 0)
+                          form.setValue(`livingPlans.${index}.insuranceAnnual` as const, nextMonthly * 12, {
+                            shouldDirty: true,
+                            shouldTouch: true,
+                          })
+                        }}
+                      />
+                    </label>
+                    <label>
+                      光熱費（月）
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        step={1000}
+                        value={Math.round(((plan?.utilitiesAnnual ?? 0) as number) / 12)}
+                        onChange={(event) => {
+                          const nextMonthly = Number(event.target.value || 0)
+                          form.setValue(`livingPlans.${index}.utilitiesAnnual` as const, nextMonthly * 12, {
+                            shouldDirty: true,
+                            shouldTouch: true,
+                          })
+                        }}
+                      />
+                    </label>
+                    <label>
+                      自由費（月）
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        step={1000}
+                        value={Math.round(((plan?.discretionaryAnnual ?? 0) as number) / 12)}
+                        onChange={(event) => {
+                          const nextMonthly = Number(event.target.value || 0)
+                          form.setValue(`livingPlans.${index}.discretionaryAnnual` as const, nextMonthly * 12, {
+                            shouldDirty: true,
+                            shouldTouch: true,
+                          })
+                        }}
+                      />
+                    </label>
+                    <label>
+                      医療費（月）
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        step={1000}
+                        value={Math.round(((plan?.healthcareAnnual ?? 0) as number) / 12)}
+                        onChange={(event) => {
+                          const nextMonthly = Number(event.target.value || 0)
+                          form.setValue(`livingPlans.${index}.healthcareAnnual` as const, nextMonthly * 12, {
+                            shouldDirty: true,
+                            shouldTouch: true,
+                          })
+                        }}
+                      />
+                    </label>
+                    <label>
+                      物価上昇率
+                      <input
+                        type="number"
+                        step="0.01"
+                        inputMode="decimal"
+                        {...register(`livingPlans.${index}.inflationRate` as const, {
+                          setValueAs: (value) => (value === '' || value === null ? undefined : Number(value)),
+                        })}
+                      />
+                    </label>
+                    <div className="action-row grid-span-all">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLivingPresetTargetIndex(index)
+                          setLivingPresetOpen(true)
+                        }}
+                      >
+                        プリセットから適用
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            )
+          })}
+          <div className="action-row">
+            <button
+              type="button"
+              onClick={() =>
+                appendLivingPlan({
+                  id: createId('living'),
+                  label: '生活費',
+                  startYearOffset: 0,
+                  endYearOffset: undefined,
+                  baseAnnual: 0,
+                  insuranceAnnual: 0,
+                  utilitiesAnnual: 0,
+                  discretionaryAnnual: 0,
+                  healthcareAnnual: 0,
+                  inflationRate: undefined,
+                })
+              }
+            >
+              + 期間を追加
+            </button>
+          </div>
         </div>
       ),
     },
@@ -446,7 +1066,7 @@ export const ScenarioForm = () => {
                   </button>
                 </div>
                 {!collapsed ? (
-                  <div className="collapsible-card__body">
+                  <div className="collapsible-card__body form-section--grid">
                     <label>
                       名称
                       <input {...register(`savingsAccounts.${index}.label` as const)} />
@@ -512,22 +1132,27 @@ export const ScenarioForm = () => {
               </div>
             )
           })}
-          <button
-            type="button"
-            onClick={() =>
-              appendSavings({
-                id: createId('savings'),
-                label: '新しい口座',
-                type: 'deposit',
-                balance: 0,
-                annualContribution: 0,
-                annualInterestRate: 0.01,
-                adjustable: true,
-              })
-            }
-          >
-            + 貯蓄を追加
-          </button>
+          <div className="action-row">
+            <button type="button" onClick={() => setSavingsPresetOpen(true)}>
+              プリセットから追加
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                appendSavings({
+                  id: createId('savings'),
+                  label: '新しい口座',
+                  type: 'deposit',
+                  balance: 0,
+                  annualContribution: 0,
+                  annualInterestRate: 0.01,
+                  adjustable: true,
+                })
+              }
+            >
+              + 貯蓄を追加
+            </button>
+          </div>
         </div>
       ),
     },
@@ -561,7 +1186,7 @@ export const ScenarioForm = () => {
                   </button>
                 </div>
                 {!collapsed ? (
-                  <div className="collapsible-card__body">
+                  <div className="collapsible-card__body form-section--grid">
                     <label>
                       ラベル
                       <input {...register(`expenseBands.${index}.label` as const)} />
@@ -633,9 +1258,29 @@ export const ScenarioForm = () => {
   ]
 
   return (
-    <section className="panel scenario-form">
+    <section className={['panel scenario-form', compactMode ? 'is-compact' : ''].join(' ')}>
       <header className="panel__header">
-        <h2>条件の編集</h2>
+        <div className="panel__header-row">
+          <h2>条件の編集</h2>
+          <div>
+            <button
+              type="button"
+              className="link-button"
+              aria-pressed={compactMode}
+              onClick={() => setCompactMode((prev) => !prev)}
+            >
+              {compactMode ? '表示を通常に' : '表示をコンパクトに'}
+            </button>
+            <button
+              type="button"
+              className="link-button"
+              aria-pressed={reducedColorMode}
+              onClick={() => setReducedColorMode((prev) => !prev)}
+            >
+              {reducedColorMode ? '色を戻す' : '色を抑える'}
+            </button>
+          </div>
+        </div>
         <p>入力するとグラフがリアルタイムで更新されます。</p>
       </header>
       <form className="form-grid">
@@ -663,10 +1308,12 @@ export const ScenarioForm = () => {
         <div className="sections-stack sections-stack--scroll">
           {sections.map((section) => {
             const collapsed = collapsedMap[section.id] ?? true
+            const summary = getSectionSummary(section.id)
+            const decor = getSectionDecor(section.id)
             return (
               <div
                 key={section.id}
-                className="collapsible-section"
+                className={['collapsible-section', decor.className].filter(Boolean).join(' ')}
                 ref={(el) => {
                   sectionRefs.current[section.id] = el
                 }}
@@ -681,8 +1328,14 @@ export const ScenarioForm = () => {
                     }))
                   }
                 >
-                  <span>{section.label}</span>
-                  <span className="collapse-icon">{collapsed ? '+' : '−'}</span>
+                  <span className="collapsible-header__label">
+                    {decor.icon}
+                    {section.label}
+                  </span>
+                  <span className="collapsible-header__meta">
+                    {summary ? <span className="collapsible-header__summary">{summary}</span> : null}
+                    <span className="collapse-icon">{collapsed ? '+' : '−'}</span>
+                  </span>
                 </button>
                 {!collapsed ? section.content : null}
               </div>
@@ -690,6 +1343,87 @@ export const ScenarioForm = () => {
           })}
         </div>
       </form>
+      <ResidentPresetDialog
+        isOpen={residentPresetOpen}
+        onClose={() => setResidentPresetOpen(false)}
+        onApply={(resident) => {
+          handleApplyResidentPreset(resident)
+          setResidentPresetOpen(false)
+        }}
+      />
+      <HousingPresetDialog
+        isOpen={housingPresetOpen}
+        onClose={() => setHousingPresetOpen(false)}
+        onApply={(plan) => {
+          handleApplyHousingPreset(plan)
+          setHousingPresetOpen(false)
+        }}
+      />
+      <VehiclePresetDialog
+        isOpen={vehiclePresetOpen}
+        onClose={() => setVehiclePresetOpen(false)}
+        onApply={(profile) => {
+          handleApplyVehiclePreset(profile)
+          setVehiclePresetOpen(false)
+        }}
+      />
+      <LivingPresetDialog
+        isOpen={livingPresetOpen}
+        onClose={() => setLivingPresetOpen(false)}
+        onApply={(preset) => {
+          const targetIndex = livingPresetTargetIndex ?? 0
+          if (!scenarioValues.livingPlans?.length) {
+            appendLivingPlan({
+              id: createId('living'),
+              label: '生活費',
+              startYearOffset: 0,
+              endYearOffset: undefined,
+              baseAnnual: 0,
+              insuranceAnnual: 0,
+              utilitiesAnnual: 0,
+              discretionaryAnnual: 0,
+              healthcareAnnual: 0,
+              inflationRate: undefined,
+            })
+          }
+          form.setValue(`livingPlans.${targetIndex}.baseAnnual` as const, preset.monthly.base * 12, {
+            shouldDirty: true,
+            shouldTouch: true,
+          })
+          form.setValue(`livingPlans.${targetIndex}.insuranceAnnual` as const, (preset.monthly.insurance ?? 0) * 12, {
+            shouldDirty: true,
+            shouldTouch: true,
+          })
+          form.setValue(`livingPlans.${targetIndex}.utilitiesAnnual` as const, (preset.monthly.utilities ?? 0) * 12, {
+            shouldDirty: true,
+            shouldTouch: true,
+          })
+          form.setValue(`livingPlans.${targetIndex}.discretionaryAnnual` as const, (preset.monthly.discretionary ?? 0) * 12, {
+            shouldDirty: true,
+            shouldTouch: true,
+          })
+          form.setValue(`livingPlans.${targetIndex}.healthcareAnnual` as const, (preset.monthly.healthcare ?? 0) * 12, {
+            shouldDirty: true,
+            shouldTouch: true,
+          })
+          if (typeof preset.inflationRate === 'number') {
+            form.setValue(`livingPlans.${targetIndex}.inflationRate` as const, preset.inflationRate, {
+              shouldDirty: true,
+              shouldTouch: true,
+            })
+          }
+          setLivingPresetTargetIndex(null)
+          setLivingPresetOpen(false)
+        }}
+      />
+      <SavingsPresetDialog
+        isOpen={savingsPresetOpen}
+        onClose={() => setSavingsPresetOpen(false)}
+        onApply={(account) => {
+          handleApplySavingsPreset(account)
+          setSavingsPresetOpen(false)
+        }}
+      />
     </section>
   )
 }
@@ -757,12 +1491,12 @@ const ResidentCard = ({
         </button>
       </div>
       {!collapsed ? (
-        <div className="collapsible-card__body">
+        <div className="collapsible-card__body form-section--grid">
           <label>
             氏名
             <input {...register(`residents.${index}.name` as const)} />
           </label>
-          <div className="grid-2">
+          <div className="grid-2 grid-span-all">
             <label>
               現在年齢
               <input
@@ -778,7 +1512,7 @@ const ResidentCard = ({
               />
             </label>
           </div>
-          <div className="grid-2">
+          <div className="grid-2 grid-span-all">
             <label>
               手取り収入（年）
               <input
@@ -799,7 +1533,7 @@ const ResidentCard = ({
               />
             </label>
           </div>
-          <details open>
+          <details open className="grid-span-all">
             <summary>収入イベント</summary>
             {incomeEventFields.map((field, eventIndex) => (
               <div key={field.id} className="inline-card">
@@ -854,13 +1588,8 @@ const ResidentCard = ({
             </button>
           </details>
 
-          <details open>
+          <details open className="grid-span-all">
             <summary>教育・習い事など</summary>
-            <div className="preset-inline-actions">
-              <button type="button" className="link-button" onClick={() => setPresetOpen(true)}>
-                プリセットから追加
-              </button>
-            </div>
             {expenseBandFields.map((field, expenseIndex) => (
               <div key={field.id} className="inline-card">
                 <label>
@@ -921,21 +1650,26 @@ const ResidentCard = ({
                 </button>
               </div>
             ))}
-            <button
-              type="button"
-              onClick={() =>
-                appendExpenseBand({
-                  id: createId('expense'),
-                  label: '教育費',
-                  startAge: 40,
-                  endAge: 43,
-                  annualAmount: 300000,
-                  category: 'education',
-                })
-              }
-            >
-              + 教育費を追加
-            </button>
+            <div className="action-row grid-span-all">
+              <button type="button" onClick={() => setPresetOpen(true)}>
+                プリセットから追加
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  appendExpenseBand({
+                    id: createId('expense'),
+                    label: '教育費',
+                    startAge: 40,
+                    endAge: 43,
+                    annualAmount: 300000,
+                    category: 'education',
+                  })
+                }
+              >
+                + 教育費を追加
+              </button>
+            </div>
           </details>
           <EducationPresetDialog
             isOpen={presetOpen}

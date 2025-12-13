@@ -1,6 +1,7 @@
 import type {
-  HousingProfile,
+  HousingPlan,
   LivingCostProfile,
+  LivingPlan,
   SavingsAccount,
   VehicleProfile,
 } from '@models/finance'
@@ -33,6 +34,7 @@ interface HousingCostBreakdown {
   management: number
   maintenance: number
   extra: number
+  rent: number
 }
 
 interface VehicleCostBreakdown {
@@ -210,28 +212,148 @@ const computeLivingCost = (profile: LivingCostProfile, yearIndex: number): numbe
   return base * multiplier
 }
 
+const selectActiveLivingPlan = (plans: LivingPlan[], yearIndex: number): LivingPlan | undefined => {
+  const candidates = plans.filter((plan) => {
+    if (yearIndex < plan.startYearOffset) {
+      return false
+    }
+    if (typeof plan.endYearOffset === 'number' && yearIndex > plan.endYearOffset) {
+      return false
+    }
+    return true
+  })
+  if (!candidates.length) {
+    return undefined
+  }
+  return candidates.reduce((latest, plan) =>
+    plan.startYearOffset >= latest.startYearOffset ? plan : latest,
+  )
+}
+
+const computeLivingCostForYear = (scenario: Scenario, yearIndex: number): number => {
+  const plans = scenario.livingPlans ?? []
+  if (plans.length) {
+    const active = selectActiveLivingPlan(plans, yearIndex)
+    if (active) {
+      const base =
+        active.baseAnnual +
+        (active.insuranceAnnual ?? 0) +
+        (active.utilitiesAnnual ?? 0) +
+        (active.discretionaryAnnual ?? 0) +
+        (active.healthcareAnnual ?? 0)
+      const inflationRate = active.inflationRate ?? scenario.living?.inflationRate ?? 0
+      const elapsed = Math.max(0, yearIndex - active.startYearOffset)
+      const multiplier = Math.pow(1 + inflationRate, elapsed)
+      return base * multiplier
+    }
+  }
+  return computeLivingCost(scenario.living, yearIndex)
+}
+
 const computeHousingCost = (
-  profile: HousingProfile | undefined,
+  plan: HousingPlan | undefined,
   state: { mortgageRemaining: number } | null,
   yearIndex: number,
   yearEvents: string[],
 ): HousingCostBreakdown => {
-  if (!profile || !state) {
-    return { total: 0, mortgage: 0, management: 0, maintenance: 0, extra: 0 }
+  if (!plan) {
+    return { total: 0, mortgage: 0, management: 0, maintenance: 0, extra: 0, rent: 0 }
   }
-  const management = profile.managementFeeMonthly * 12
-  const maintenance = profile.maintenanceReserveMonthly * 12
-  const extra = profile.extraAnnualCosts ?? 0
+
+  if (plan.type === 'rent') {
+    const rent = plan.monthlyRent * 12
+    const management = (plan.monthlyFees ?? 0) * 12
+    const maintenance = 0
+    const extraAnnual = plan.extraAnnualCosts ?? 0
+    const moveIn = yearIndex === plan.startYearOffset ? (plan.moveInCost ?? 0) : 0
+    const moveOut =
+      typeof plan.endYearOffset === 'number' && yearIndex === plan.endYearOffset
+        ? (plan.moveOutCost ?? 0)
+        : 0
+    if (moveIn > 0) {
+      yearEvents.push(`${plan.label}: 入居費用`)
+    }
+    if (moveOut > 0) {
+      yearEvents.push(`${plan.label}: 退去費用`)
+    }
+    const total = rent + management + extraAnnual + moveIn + moveOut
+    return {
+      total,
+      mortgage: 0,
+      management,
+      maintenance,
+      extra: extraAnnual + moveIn + moveOut,
+      rent,
+    }
+  }
+
+  if (!state) {
+    return { total: 0, mortgage: 0, management: 0, maintenance: 0, extra: 0, rent: 0 }
+  }
+
+  const management = plan.managementFeeMonthly * 12
+  const maintenance = plan.maintenanceReserveMonthly * 12
+  const extraAnnual = plan.extraAnnualCosts ?? 0
+  const purchase = yearIndex === plan.startYearOffset ? (plan.purchaseCost ?? 0) : 0
+  if (purchase > 0) {
+    yearEvents.push(`${plan.label}: 購入費用`)
+  }
+
   const mortgagePayment =
     state.mortgageRemaining > 0
-      ? Math.min(state.mortgageRemaining, profile.monthlyMortgage * 12)
+      ? Math.min(state.mortgageRemaining, plan.monthlyMortgage * 12)
       : 0
   state.mortgageRemaining = Math.max(0, state.mortgageRemaining - mortgagePayment)
   if (state.mortgageRemaining === 0 && mortgagePayment > 0) {
     yearEvents.push(`住宅ローン完済 (Year ${yearIndex + 1})`)
   }
-  const total = mortgagePayment + management + maintenance + extra
-  return { total, mortgage: mortgagePayment, management, maintenance, extra }
+
+  const total = mortgagePayment + management + maintenance + extraAnnual + purchase
+  return {
+    total,
+    mortgage: mortgagePayment,
+    management,
+    maintenance,
+    extra: extraAnnual + purchase,
+    rent: 0,
+  }
+}
+
+const normalizeHousingPlans = (scenario: Scenario): HousingPlan[] => {
+  if (scenario.housingPlans?.length) {
+    return scenario.housingPlans
+  }
+  if (scenario.housing) {
+    return [
+      {
+        id: 'legacy-housing',
+        label: '住宅',
+        type: 'own',
+        startYearOffset: 0,
+        endYearOffset: undefined,
+        ...scenario.housing,
+      },
+    ]
+  }
+  return []
+}
+
+const selectActiveHousingPlan = (plans: HousingPlan[], yearIndex: number): HousingPlan | undefined => {
+  const candidates = plans.filter((plan) => {
+    if (yearIndex < plan.startYearOffset) {
+      return false
+    }
+    if (typeof plan.endYearOffset === 'number' && yearIndex > plan.endYearOffset) {
+      return false
+    }
+    return true
+  })
+  if (!candidates.length) {
+    return undefined
+  }
+  return candidates.reduce((latest, plan) =>
+    plan.startYearOffset >= latest.startYearOffset ? plan : latest,
+  )
 }
 
 const computeVehicleCost = (
@@ -330,9 +452,14 @@ export const simulateScenario = (
   const scenarioExpenses = expandScenarioExpenseBands(scenario.expenseBands, horizon)
   const expenseMap = buildExpenseMap([...residentExpenses, ...scenarioExpenses])
 
-  const housingState = scenario.housing
-    ? { mortgageRemaining: scenario.housing.mortgageRemaining }
-    : null
+  const housingPlans = normalizeHousingPlans(scenario)
+  const housingStates = new Map<string, { mortgageRemaining: number }>()
+  housingPlans.forEach((plan) => {
+    if (plan.type !== 'own') {
+      return
+    }
+    housingStates.set(plan.id, { mortgageRemaining: plan.mortgageRemaining })
+  })
   const vehicleStates = scenario.vehicles?.map((vehicle) => ({ loanRemaining: vehicle.loanRemaining }))
   const savingsAccounts: SavingsAccountState[] = scenario.savingsAccounts.map((account) => ({
     ...account,
@@ -377,13 +504,35 @@ export const simulateScenario = (
       }
     })
 
-    cashOnHand += incomeForYear
-    totalIncome += incomeForYear
-
-    const livingCost = computeLivingCost(scenario.living, yearIndex)
-    const housingCost = computeHousingCost(scenario.housing, housingState, yearIndex, yearEvents)
+    const livingCost = computeLivingCostForYear(scenario, yearIndex)
+    const activeHousingPlan = selectActiveHousingPlan(housingPlans, yearIndex)
+    const housingState =
+      activeHousingPlan && activeHousingPlan.type === 'own'
+        ? (housingStates.get(activeHousingPlan.id) ?? null)
+        : null
+    const housingCost = computeHousingCost(activeHousingPlan, housingState, yearIndex, yearEvents)
+    if (
+      activeHousingPlan?.type === 'own' &&
+      typeof activeHousingPlan.endYearOffset === 'number' &&
+      yearIndex === activeHousingPlan.endYearOffset &&
+      (activeHousingPlan.saleValue || (housingState?.mortgageRemaining ?? 0) > 0)
+    ) {
+      const remaining = housingState?.mortgageRemaining ?? 0
+      const saleValue = activeHousingPlan.saleValue ?? 0
+      const netProceeds = saleValue - remaining
+      if (housingState) {
+        housingState.mortgageRemaining = 0
+      }
+      if (saleValue > 0 || remaining > 0) {
+        yearEvents.push(`${activeHousingPlan.label}: 売却`)
+      }
+      incomeForYear += netProceeds
+    }
     const vehicleCost = computeVehicleCost(scenario.vehicles, vehicleStates, yearIndex, yearEvents)
     const bandExpenses = categorizeExpenses(expenseMap.get(yearIndex) ?? [])
+
+    cashOnHand += incomeForYear
+    totalIncome += incomeForYear
 
     const educationCost = bandExpenses.education
     const housingExtras = bandExpenses.housing

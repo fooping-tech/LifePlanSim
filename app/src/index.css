@@ -8,6 +8,15 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  --c-income: #22c55e;
+  --c-living: #2563eb;
+  --c-education: #f97316;
+  --c-housing: #16a34a;
+  --c-vehicle: #9333ea;
+  --c-savings: #f43f5e;
+  --c-other: #0ea5e9;
+  --c-warning: #b45309;
 }
 
 *,

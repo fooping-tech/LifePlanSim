@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useLayoutEffect, useMemo, useState } from 'react'
 import {
   VictoryAxis,
   VictoryBar,
@@ -26,10 +26,33 @@ const formatCurrency = (value: number) =>
 const formatAxisManYen = (value: number) =>
   new Intl.NumberFormat('ja-JP', { maximumFractionDigits: 0 }).format(value / 10_000)
 
-const defaultChartPadding = { top: 40, bottom: 100, left: 90, right: 60 }
+const defaultChartPadding = { top: 40, bottom: 100, left: 110, right: 40 }
 const dependentAxisStyle = {
-  axisLabel: { padding: 40, fontSize: 12, fill: '#475569' },
-  tickLabels: { fontSize: 10, padding: 6 },
+  axisLabel: { padding: 62, fontSize: 12, fill: '#475569' },
+  tickLabels: { fontSize: 10, padding: 4 },
+}
+
+const useMeasuredWidth = () => {
+  const [node, setNode] = useState<HTMLDivElement | null>(null)
+  const [width, setWidth] = useState(640)
+
+  useLayoutEffect(() => {
+    if (!node) {
+      return
+    }
+    const element = node
+    const observer = new ResizeObserver((entries) => {
+      const next = entries[0]?.contentRect?.width
+      if (!next) {
+        return
+      }
+      setWidth(Math.max(320, Math.floor(next)))
+    })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [node])
+
+  return { setContainer: setNode, width }
 }
 
 const expenseCategories = [
@@ -293,6 +316,8 @@ interface ScenarioChartsProps {
 
 const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
   const [view, setView] = useState<'netWorth' | 'cashFlow' | 'waterfall'>('netWorth')
+  const { setContainer: setNetWorthContainer, width: netWorthWidth } = useMeasuredWidth()
+  const { setContainer: setCashFlowContainer, width: cashFlowWidth } = useMeasuredWidth()
 
   return (
     <div className="scenario-results">
@@ -332,36 +357,43 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
             <h3>{scenario.label} - 純資産推移</h3>
             <span>最終: {formatCurrency(scenario.summary.finalNetWorth)}</span>
           </div>
-          <VictoryChart theme={VictoryTheme.material} height={320} width={640} padding={defaultChartPadding}>
-            <VictoryLegend
-              x={80}
-              y={0}
-              orientation="horizontal"
-              gutter={16}
-              data={[
-                {
-                  name: scenario.label,
-                  symbol: { fill: color },
-                },
-              ]}
-            />
-            <VictoryAxis tickFormat={(tick) => `${tick}`} />
-            <VictoryAxis
-              dependentAxis
-              tickFormat={formatAxisManYen}
-              label="万円"
-              style={dependentAxisStyle}
-            />
-            <VictoryLine
-              data={scenario.netWorth}
-              style={{
-                data: {
-                  stroke: color,
-                  strokeWidth: 3,
-                },
-              }}
-            />
-          </VictoryChart>
+          <div ref={setNetWorthContainer}>
+            <VictoryChart
+              theme={VictoryTheme.material}
+              height={300}
+              width={netWorthWidth}
+              padding={defaultChartPadding}
+            >
+              <VictoryLegend
+                x={80}
+                y={0}
+                orientation="horizontal"
+                gutter={16}
+                data={[
+                  {
+                    name: scenario.label,
+                    symbol: { fill: color },
+                  },
+                ]}
+              />
+              <VictoryAxis tickFormat={(tick) => `${tick}`} />
+              <VictoryAxis
+                dependentAxis
+                tickFormat={formatAxisManYen}
+                label="万円"
+                style={dependentAxisStyle}
+              />
+              <VictoryLine
+                data={scenario.netWorth}
+                style={{
+                  data: {
+                    stroke: color,
+                    strokeWidth: 3,
+                  },
+                }}
+              />
+            </VictoryChart>
+          </div>
         </div>
       )}
 
@@ -372,43 +404,50 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
             <span>総収入 {formatCurrency(scenario.summary.totalIncome)}</span>
           </div>
           <>
-            <VictoryChart
-              theme={VictoryTheme.material}
-              height={340}
-              width={640}
-              padding={defaultChartPadding}
-              containerComponent={
-                <VictoryVoronoiContainer
-                  labels={({ datum }) => `${datum.categoryLabel} ${formatCurrency(datum.y)}\n年: ${datum.x}`}
-                  labelComponent={
-                    <VictoryTooltip
-                      cornerRadius={4}
-                      flyoutPadding={{ top: 8, bottom: 8, left: 10, right: 10 }}
-                    />
-                  }
-                />
-              }
-            >
-              <VictoryAxis tickFormat={(tick) => `${tick}`} />
-              <VictoryAxis
-                dependentAxis
-                tickFormat={formatAxisManYen}
-                label="万円"
-                style={dependentAxisStyle}
-              />
-              <VictoryBar data={scenario.cashIncomeSeries} style={{ data: { fill: INCOME_CATEGORY.color, opacity: 0.9 } }} />
-              <VictoryStack>
-                {expenseCategories.map((cat) => (
-                  <VictoryBar
-                    key={cat.key}
-                    data={scenario.cashFlowSeries
-                      .filter((entry: CashFlowSeriesEntry) => entry.category === cat.key)
-                      .map((entry) => ({ ...entry, y: -entry.y }))}
-                    style={{ data: { fill: cat.color } }}
+            <div ref={setCashFlowContainer}>
+              <VictoryChart
+                theme={VictoryTheme.material}
+                height={340}
+                width={cashFlowWidth}
+                padding={defaultChartPadding}
+                containerComponent={
+                  <VictoryVoronoiContainer
+                    labels={({ datum }) => `${datum.categoryLabel} ${formatCurrency(datum.y)}\n年: ${datum.x}`}
+                    labelComponent={
+                      <VictoryTooltip
+                        constrainToVisibleArea
+                        cornerRadius={4}
+                        flyoutPadding={{ top: 8, bottom: 8, left: 10, right: 10 }}
+                        style={{ fontSize: 10 }}
+                      />
+                    }
                   />
-                ))}
-              </VictoryStack>
-            </VictoryChart>
+                }
+              >
+                <VictoryAxis tickFormat={(tick) => `${tick}`} />
+                <VictoryAxis
+                  dependentAxis
+                  tickFormat={formatAxisManYen}
+                  label="万円"
+                  style={dependentAxisStyle}
+                />
+                <VictoryBar
+                  data={scenario.cashIncomeSeries}
+                  style={{ data: { fill: INCOME_CATEGORY.color, opacity: 0.9 } }}
+                />
+                <VictoryStack>
+                  {expenseCategories.map((cat) => (
+                    <VictoryBar
+                      key={cat.key}
+                      data={scenario.cashFlowSeries
+                        .filter((entry: CashFlowSeriesEntry) => entry.category === cat.key)
+                        .map((entry) => ({ ...entry, y: -entry.y }))}
+                      style={{ data: { fill: cat.color } }}
+                    />
+                  ))}
+                </VictoryStack>
+              </VictoryChart>
+            </div>
             <div className="chart-legend">
               <div className="chart-legend__item">
                 <span className="chart-legend__swatch" style={{ backgroundColor: INCOME_CATEGORY.color }} />
@@ -528,6 +567,8 @@ const CombinedCharts = ({
   }>
 }) => {
   const [view, setView] = useState<'netWorth' | 'cashFlow'>('netWorth')
+  const { setContainer: setNetWorthContainer, width: netWorthWidth } = useMeasuredWidth()
+  const { setContainer: setCashFlowContainer, width: cashFlowWidth } = useMeasuredWidth()
   return (
     <div className="scenario-results">
       <div className="sub-tab-nav" role="tablist" aria-label="全体グラフ切り替え">
@@ -555,90 +596,106 @@ const CombinedCharts = ({
           <div className="chart-block__header">
             <h3>全シナリオ純資産比較</h3>
           </div>
-          <VictoryChart theme={VictoryTheme.material} height={320} width={640} padding={defaultChartPadding}>
-            <VictoryLegend
-              x={60}
-              y={0}
-              orientation="horizontal"
-              gutter={16}
-              data={scenarios.map((scenario) => ({
-                name: scenario.label,
-                symbol: { fill: scenario.color },
-              }))}
-            />
-            <VictoryAxis tickFormat={(tick) => `${tick}`} />
-            <VictoryAxis
-              dependentAxis
-              tickFormat={formatAxisManYen}
-              label="万円"
-              style={dependentAxisStyle}
-            />
-            {scenarios.map((scenario) => (
-              <VictoryLine
-                key={scenario.id}
-                data={scenario.netWorth}
-                style={{ data: { stroke: scenario.color, strokeWidth: 2 } }}
+          <div ref={setNetWorthContainer}>
+            <VictoryChart
+              theme={VictoryTheme.material}
+              height={300}
+              width={netWorthWidth}
+              padding={defaultChartPadding}
+            >
+              <VictoryLegend
+                x={60}
+                y={0}
+                orientation="horizontal"
+                gutter={16}
+                data={scenarios.map((scenario) => ({
+                  name: scenario.label,
+                  symbol: { fill: scenario.color },
+                }))}
               />
-            ))}
-          </VictoryChart>
+              <VictoryAxis tickFormat={(tick) => `${tick}`} />
+              <VictoryAxis
+                dependentAxis
+                tickFormat={formatAxisManYen}
+                label="万円"
+                style={dependentAxisStyle}
+              />
+              {scenarios.map((scenario) => (
+                <VictoryLine
+                  key={scenario.id}
+                  data={scenario.netWorth}
+                  style={{ data: { stroke: scenario.color, strokeWidth: 2 } }}
+                />
+              ))}
+            </VictoryChart>
+          </div>
         </div>
       ) : (
         <div className="chart-block">
           <div className="chart-block__header">
             <h3>全シナリオキャッシュフロー比較</h3>
           </div>
-          <VictoryChart
-            theme={VictoryTheme.material}
-            height={340}
-            width={640}
-            padding={defaultChartPadding}
-            containerComponent={
-              <VictoryVoronoiContainer
-                labels={({ datum }) =>
-                  `${datum.scenarioLabel ?? ''} ${datum.categoryLabel} ${formatCurrency(datum.y)}\n年: ${datum.x}`
-                }
-                labelComponent={<VictoryTooltip cornerRadius={4} flyoutPadding={8} />}
+          <div ref={setCashFlowContainer}>
+            <VictoryChart
+              theme={VictoryTheme.material}
+              height={340}
+              width={cashFlowWidth}
+              padding={defaultChartPadding}
+              containerComponent={
+                <VictoryVoronoiContainer
+                  labels={({ datum }) =>
+                    `${datum.scenarioLabel ?? ''} ${datum.categoryLabel} ${formatCurrency(datum.y)}\n年: ${datum.x}`
+                  }
+                  labelComponent={
+                    <VictoryTooltip
+                      constrainToVisibleArea
+                      cornerRadius={4}
+                      flyoutPadding={8}
+                      style={{ fontSize: 10 }}
+                    />
+                  }
+                />
+              }
+            >
+              <VictoryAxis tickFormat={(tick) => `${tick}`} />
+              <VictoryAxis
+                dependentAxis
+                tickFormat={formatAxisManYen}
+                label="万円"
+                style={dependentAxisStyle}
               />
-            }
-          >
-            <VictoryAxis tickFormat={(tick) => `${tick}`} />
-            <VictoryAxis
-              dependentAxis
-              tickFormat={formatAxisManYen}
-              label="万円"
-              style={dependentAxisStyle}
-            />
-            {scenarios.map((scenario, index) => {
-              const offset = (index - (scenarios.length - 1) / 2) * 0.3
-              return (
-                <g key={scenario.id}>
-                  <VictoryBar
-                    data={scenario.cashIncomeSeries.map((entry) => ({
-                      ...entry,
-                      x: entry.x + offset,
-                      scenarioLabel: scenario.label,
-                    }))}
-                    style={{ data: { fill: INCOME_CATEGORY.color, opacity: 0.85 } }}
-                  />
-                  <VictoryStack>
-                    {expenseCategories.map((cat) => (
-                      <VictoryBar
-                        key={cat.key}
-                        data={scenario.cashExpenseSeries
-                          .filter((entry: CashExpenseSeriesEntry) => entry.category === cat.key)
-                          .map((entry: CashExpenseSeriesEntry) => ({
-                            ...entry,
-                            x: entry.x + offset,
-                            scenarioLabel: scenario.label,
-                          }))}
-                        style={{ data: { fill: cat.color, opacity: 0.8 } }}
-                      />
-                    ))}
-                  </VictoryStack>
-                </g>
-              )
-            })}
-          </VictoryChart>
+              {scenarios.map((scenario, index) => {
+                const offset = (index - (scenarios.length - 1) / 2) * 0.3
+                return (
+                  <g key={scenario.id}>
+                    <VictoryBar
+                      data={scenario.cashIncomeSeries.map((entry) => ({
+                        ...entry,
+                        x: entry.x + offset,
+                        scenarioLabel: scenario.label,
+                      }))}
+                      style={{ data: { fill: INCOME_CATEGORY.color, opacity: 0.85 } }}
+                    />
+                    <VictoryStack>
+                      {expenseCategories.map((cat) => (
+                        <VictoryBar
+                          key={cat.key}
+                          data={scenario.cashExpenseSeries
+                            .filter((entry: CashExpenseSeriesEntry) => entry.category === cat.key)
+                            .map((entry: CashExpenseSeriesEntry) => ({
+                              ...entry,
+                              x: entry.x + offset,
+                              scenarioLabel: scenario.label,
+                            }))}
+                          style={{ data: { fill: cat.color, opacity: 0.8 } }}
+                        />
+                      ))}
+                    </VictoryStack>
+                  </g>
+                )
+              })}
+            </VictoryChart>
+          </div>
           <div className="chart-legend">
             <div className="chart-legend__item">
               <span className="chart-legend__swatch" style={{ backgroundColor: INCOME_CATEGORY.color }} />

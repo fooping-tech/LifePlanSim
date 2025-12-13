@@ -1,4 +1,11 @@
-import type { HousingProfile, LivingCostProfile, SavingsAccount, VehicleProfile } from './finance'
+import type {
+  HousingPlan,
+  HousingProfile,
+  LivingCostProfile,
+  LivingPlan,
+  SavingsAccount,
+  VehicleProfile,
+} from './finance'
 import type { ExpenseBand, IncomeEvent, Resident } from './resident'
 
 export interface Scenario {
@@ -7,8 +14,10 @@ export interface Scenario {
   description?: string
   startYear: number
   residents: Resident[]
+  housingPlans?: HousingPlan[]
   housing?: HousingProfile
   vehicles?: VehicleProfile[]
+  livingPlans?: LivingPlan[]
   living: LivingCostProfile
   savingsAccounts: SavingsAccount[]
   expenseBands?: ExpenseBand[]

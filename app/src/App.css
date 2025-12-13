@@ -244,7 +244,38 @@
 }
 
 .collapsible-section {
+  --section-accent: #cbd5f5;
+  border-left: 3px solid var(--section-accent);
+  padding-left: 0.5rem;
   border-bottom: 1px solid #e2e8f0;
+}
+
+.collapsible-section--basic {
+  --section-accent: color-mix(in srgb, #2563eb 70%, #cbd5f5);
+}
+
+.collapsible-section--residents {
+  --section-accent: color-mix(in srgb, #1d4ed8 70%, #cbd5f5);
+}
+
+.collapsible-section--housing {
+  --section-accent: var(--c-housing);
+}
+
+.collapsible-section--vehicle {
+  --section-accent: var(--c-vehicle);
+}
+
+.collapsible-section--living {
+  --section-accent: var(--c-living);
+}
+
+.collapsible-section--savings {
+  --section-accent: var(--c-savings);
+}
+
+.collapsible-section--events {
+  --section-accent: var(--c-education);
 }
 
 .collapsible-section:last-of-type {
@@ -263,6 +294,103 @@
   font-weight: 600;
   color: #0f172a;
   cursor: pointer;
+}
+
+.collapsible-header__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.section-icon {
+  color: var(--section-accent);
+  font-size: 1.05rem;
+  flex-shrink: 0;
+}
+
+.collapsible-header__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.collapsible-header__summary {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--section-accent) 25%, #e2e8f0);
+  background: color-mix(in srgb, var(--section-accent) 10%, #fff);
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  font-weight: 500;
+  font-size: 0.8rem;
+  color: #334155;
+  max-width: 48ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panel__header-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.panel__header-row .link-button + .link-button {
+  margin-left: 0.75rem;
+}
+
+.scenario-form.is-compact .section-jump__btn {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+}
+
+.scenario-form.is-compact .form-grid {
+  gap: 0.65rem;
+}
+
+.scenario-form.is-compact .sections-stack {
+  gap: 0.35rem;
+}
+
+.scenario-form.is-compact .form-section {
+  padding: 0.5rem;
+}
+
+.scenario-form.is-compact .card {
+  padding: 0.4rem 0.55rem;
+  margin-bottom: 0.35rem;
+}
+
+.scenario-form.is-compact input,
+.scenario-form.is-compact select,
+.scenario-form.is-compact textarea {
+  padding: 0.22rem 0.4rem;
+  font-size: 0.78rem;
+}
+
+.scenario-form.is-compact .collapsible-card__body {
+  margin-top: 0.35rem;
+}
+
+.scenario-form.is-compact .inline-card {
+  gap: 0.25rem;
+  padding: 0.32rem;
+  margin-bottom: 0.25rem;
+}
+
+body.reduced-color {
+  --c-income: #64748b;
+  --c-living: #64748b;
+  --c-education: #64748b;
+  --c-housing: #64748b;
+  --c-vehicle: #64748b;
+  --c-savings: #64748b;
+  --c-other: #64748b;
+  --c-warning: #64748b;
 }
 
 .collapse-icon {
@@ -406,9 +534,16 @@ textarea {
 
 .collapsible-card__body {
   margin-top: 0.5rem;
+}
+
+.collapsible-card__body:not(.form-section--grid) {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+}
+
+.grid-span-all {
+  grid-column: 1 / -1;
 }
 
 .link-button {
@@ -445,6 +580,15 @@ textarea {
   display: flex;
   justify-content: flex-end;
   margin-bottom: 0.35rem;
+}
+
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 0.35rem;
 }
 
 details summary {

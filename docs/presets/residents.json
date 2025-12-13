@@ -1,0 +1,194 @@
+[
+  {
+    "id": "dual-income-parents",
+    "title": "共働き夫婦 + 子ども2人",
+    "description": "30代夫婦が2人の子ども（6歳・3歳）を育てるケース。教育費や扶養を標準でセット。",
+    "resident": {
+      "name": "太郎",
+      "currentAge": 34,
+      "retirementAge": 65,
+      "baseNetIncome": 6000000,
+      "annualIncomeGrowthRate": 0.025,
+      "dependents": 2,
+      "incomeEvents": [
+        {
+          "label": "昇進",
+          "type": "raise",
+          "amount": 600000,
+          "triggerAge": 40
+        },
+        {
+          "label": "退職金",
+          "type": "bonus",
+          "amount": 15000000,
+          "triggerAge": 60
+        }
+      ],
+      "expenseBands": [
+        { "label": "子どもA 小学校", "category": "education", "startAge": 34, "endAge": 40, "annualAmount": 400000 },
+        { "label": "子どもA 中学高校", "category": "education", "startAge": 40, "endAge": 48, "annualAmount": 800000 },
+        { "label": "子どもA 大学", "category": "education", "startAge": 48, "endAge": 52, "annualAmount": 1600000 }
+      ]
+    }
+  },
+  {
+    "id": "single-earner",
+    "title": "単身キャリア",
+    "description": "40代で年収アップを見込む単身者。後半は自己投資に重点。",
+    "resident": {
+      "name": "花子",
+      "currentAge": 40,
+      "retirementAge": 60,
+      "baseNetIncome": 5200000,
+      "annualIncomeGrowthRate": 0.03,
+      "dependents": 0,
+      "incomeEvents": [
+        { "label": "専門資格取得", "type": "raise", "amount": 800000, "triggerAge": 43 },
+        { "label": "サバティカル", "type": "reduction", "amount": -1200000, "triggerAge": 50, "durationYears": 1 }
+      ],
+      "expenseBands": [
+        { "label": "語学留学準備", "category": "lessons", "startAge": 41, "endAge": 42, "annualAmount": 300000 },
+        { "label": "専門学校", "category": "education", "startAge": 42, "endAge": 44, "annualAmount": 900000 }
+      ]
+    }
+  },
+  {
+    "id": "late-retiree",
+    "title": "シニア再雇用",
+    "description": "定年後も再雇用で70歳まで働くシニア向けテンプレート。",
+    "resident": {
+      "name": "次郎",
+      "currentAge": 58,
+      "retirementAge": 70,
+      "baseNetIncome": 4800000,
+      "annualIncomeGrowthRate": 0.015,
+      "dependents": 0,
+      "incomeEvents": [
+        { "label": "再雇用開始", "type": "reduction", "amount": -1200000, "triggerAge": 65 },
+        { "label": "年金加算", "type": "bonus", "amount": 1800000, "triggerAge": 68 }
+      ],
+      "expenseBands": [
+        { "label": "親介護費用", "category": "living", "startAge": 60, "endAge": 65, "annualAmount": 800000 }
+      ]
+    }
+  },
+  {
+    "id": "child-private-full",
+    "title": "子ども: 小学校から大学まで私立",
+    "description": "6歳から大学卒業まで一貫して私立に通うケース。",
+    "resident": {
+      "name": "子ども(私立一貫)",
+      "currentAge": 6,
+      "retirementAge": 22,
+      "baseNetIncome": 0,
+      "annualIncomeGrowthRate": 0,
+      "dependents": 0,
+      "incomeEvents": [],
+      "expenseBands": [
+        { "label": "小学校 私立", "category": "education", "startAge": 6, "endAge": 12, "annualAmount": 900000 },
+        { "label": "中学校 私立", "category": "education", "startAge": 12, "endAge": 15, "annualAmount": 1200000 },
+        { "label": "高校 私立", "category": "education", "startAge": 15, "endAge": 18, "annualAmount": 1400000 },
+        { "label": "大学 私立", "category": "education", "startAge": 18, "endAge": 22, "annualAmount": 1600000 }
+      ]
+    }
+  },
+  {
+    "id": "child-private-from-junior",
+    "title": "子ども: 中学から私立",
+    "description": "小学校までは公立、中学から大学まで私立に進むパターン。",
+    "resident": {
+      "name": "子ども(中学から私立)",
+      "currentAge": 12,
+      "retirementAge": 22,
+      "baseNetIncome": 0,
+      "annualIncomeGrowthRate": 0,
+      "dependents": 0,
+      "incomeEvents": [],
+      "expenseBands": [
+        { "label": "小学校 公立", "category": "education", "startAge": 6, "endAge": 12, "annualAmount": 400000 },
+        { "label": "中学校 私立", "category": "education", "startAge": 12, "endAge": 15, "annualAmount": 1100000 },
+        { "label": "高校 私立", "category": "education", "startAge": 15, "endAge": 18, "annualAmount": 1350000 },
+        { "label": "大学 私立", "category": "education", "startAge": 18, "endAge": 22, "annualAmount": 1600000 }
+      ]
+    }
+  },
+  {
+    "id": "child-private-from-high",
+    "title": "子ども: 高校から私立",
+    "description": "高校から私立進学する想定。大学も私立。",
+    "resident": {
+      "name": "子ども(高校から私立)",
+      "currentAge": 15,
+      "retirementAge": 22,
+      "baseNetIncome": 0,
+      "annualIncomeGrowthRate": 0,
+      "dependents": 0,
+      "incomeEvents": [],
+      "expenseBands": [
+        { "label": "小学校 公立", "category": "education", "startAge": 6, "endAge": 12, "annualAmount": 400000 },
+        { "label": "中学校 公立", "category": "education", "startAge": 12, "endAge": 15, "annualAmount": 500000 },
+        { "label": "高校 私立", "category": "education", "startAge": 15, "endAge": 18, "annualAmount": 1300000 },
+        { "label": "大学 私立", "category": "education", "startAge": 18, "endAge": 22, "annualAmount": 1500000 }
+      ]
+    }
+  },
+  {
+    "id": "child-private-college",
+    "title": "子ども: 大学から私立",
+    "description": "高校まで公立、大学のみ私立へ進学するパターン。",
+    "resident": {
+      "name": "子ども(大学から私立)",
+      "currentAge": 18,
+      "retirementAge": 22,
+      "baseNetIncome": 0,
+      "annualIncomeGrowthRate": 0,
+      "dependents": 0,
+      "incomeEvents": [],
+      "expenseBands": [
+        { "label": "小学校 公立", "category": "education", "startAge": 6, "endAge": 12, "annualAmount": 400000 },
+        { "label": "中学校 公立", "category": "education", "startAge": 12, "endAge": 15, "annualAmount": 500000 },
+        { "label": "高校 公立", "category": "education", "startAge": 15, "endAge": 18, "annualAmount": 600000 },
+        { "label": "大学 私立", "category": "education", "startAge": 18, "endAge": 22, "annualAmount": 1400000 }
+      ]
+    }
+  },
+  {
+    "id": "child-private-dorm",
+    "title": "子ども: 私立一貫 + 大学は下宿",
+    "description": "小学校から私立、大学は私立＋下宿費用を計上。",
+    "resident": {
+      "name": "子ども(私立+下宿)",
+      "currentAge": 6,
+      "retirementAge": 22,
+      "baseNetIncome": 0,
+      "annualIncomeGrowthRate": 0,
+      "dependents": 0,
+      "incomeEvents": [],
+      "expenseBands": [
+        { "label": "小学校 私立", "category": "education", "startAge": 6, "endAge": 12, "annualAmount": 900000 },
+        { "label": "中学校 私立", "category": "education", "startAge": 12, "endAge": 15, "annualAmount": 1200000 },
+        { "label": "高校 私立", "category": "education", "startAge": 15, "endAge": 18, "annualAmount": 1400000 },
+        { "label": "大学 私立", "category": "education", "startAge": 18, "endAge": 22, "annualAmount": 1600000 },
+        { "label": "大学 下宿費", "category": "living", "startAge": 18, "endAge": 22, "annualAmount": 800000 }
+      ]
+    }
+  },
+  {
+    "id": "child-private-grad",
+    "title": "子ども: 私立大学 + 大学院",
+    "description": "私立大学卒業後に大学院（修士2年）へ進学するケース。",
+    "resident": {
+      "name": "子ども(大学院進学)",
+      "currentAge": 18,
+      "retirementAge": 24,
+      "baseNetIncome": 0,
+      "annualIncomeGrowthRate": 0,
+      "dependents": 0,
+      "incomeEvents": [],
+      "expenseBands": [
+        { "label": "大学 私立", "category": "education", "startAge": 18, "endAge": 22, "annualAmount": 1500000 },
+        { "label": "大学院 私立", "category": "education", "startAge": 22, "endAge": 24, "annualAmount": 1600000 }
+      ]
+    }
+  }
+]

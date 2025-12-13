@@ -11,6 +11,10 @@ Deliver a browser-based interactive simulator that lets households model long-te
 - [x] (2025-02-14 05:15Z) Captured domain objects plus comparison requirements; scaffolded Vite React app with dependencies to handle residents, housing, vehicle, living, and savings inputs.
 - [x] (2025-02-14 05:30Z) Implemented TypeScript models and simulation engine with Vitest coverage for income growth, event-driven expenses, and savings compounding.
 - [x] (2025-02-14 05:40Z) Delivered interactive UI (React + Zustand + react-hook-form + Victory) featuring multi-scenario editing, charts, persistence, and manual verification via dev server.
+- [x] (2025-02-15 04:30Z) Added preset infrastructure (education + resident + housing) including JSON catalogs, hooks, and dialogs wired into ScenarioForm for rapid input.
+- [x] (2025-02-15 05:10Z) Delivered vehicle preset data/hook/dialog and wired it into the 車一覧セクション so users can add loan or一括モデル instantly.
+- [x] (2025-02-15 05:45Z) Added savings preset catalog/hook/dialog and connected it to the 貯蓄口座一覧セクション for rapid口座追加.
+- [x] (2025-02-15 06:05Z) Expanded resident presets with child education patterns (私立小〜大学院、下宿含む) to accelerate dependent setup.
 
 ## Surprises & Discoveries
 
@@ -75,10 +79,49 @@ Milestone 4 (Validation & UX refinements) adds guardrails: highlight years where
     - Savings/investment preset dialog to quickly add貯蓄/投資戦略 (`docs/presets/savings.json`).
     - Resident preset dialog (`docs/presets/residents.json`) covering persona-based defaults (年齢レンジ、収入曲線、家族構成、初期教育バンド) that can seed an entire resident card.
     Each dialog should present cards, filtering controls, and CRUD actions mirroring the education picker so users can load recommended templates or maintain custom libraries.
-11. Expand the housing section to support multiple property/住み替え entries, allowing each item to capture mortgage,管理費,売却/購入イベント. Update the vehicle section so a car can be purchased via loan or一括 (toggle between structures), and extend savings/investment editors to collect start/end years plus contribution cadence for dollar-cost averaging (ドルコスト平均法) or lump-sum investments.
+11. Expand the housing section to support multiple housing/住み替え entries (2回目以降も含む). Each entry must capture its period (start/end age or year) and support both owned housing (mortgage + 管理費/修繕費) and rental/apartment scenarios (rent + fees), plus optional purchase/sale events so the simulation engine can apply costs/proceeds at the right time.
 12. Introduce `LivingExpenseBand` modeling in both schema and UI: allow users to add multiple life-stage living cost blocks with start/ end ages, category, and 年間費用 so the engine can vary living expenses over time.
 13. Update `app/src/App.tsx` to render layout, forms, charts, and call-to-action for adding scenarios. Use React Router only if multiple views are needed (optional).
-14. Run `npm run lint`, `npm run test`, and `npm run dev` to verify. Record results in `Validation and Acceptance`.
+14. Polish chart UX to avoid visual overflow/collisions:
+    - Reduce the net worth (純資産推移) chart size so it does not clip/overflow its container.
+    - Prevent the cash flow tooltip/flyout (キャッシュフローの吹き出し) from overflowing the chart area by clamping/positioning within bounds.
+    - Avoid overlap between the net worth y-axis ticks and the unit label “万円” (adjust padding, axis label offset, or layout).
+15. Run `npm run lint`, `npm run test`, and `npm run dev` to verify. Record results in `Validation and Acceptance`.
+16. Compact the “条件の編集” (ScenarioForm) so the overall state is understandable within a single screen as much as possible:
+    - Remove nested scroll traps inside sections/cards (prefer a single scroll container) so users can reach all fields without “scroll inside scroll”.
+    - Introduce a dense layout mode for form sections (smaller vertical spacing, tighter cards, reduced label/input padding) via CSS variables and a single wrapper class, rather than per-component one-off tweaks.
+    - For high-field groups like “住宅コスト”, use a multi-column grid that adapts to available width/height and add an “詳細” (advanced) fold to hide rarely-changed fields (e.g., 入退去費用 / 売却額) while keeping core numbers visible at a glance.
+    - Add a per-section header summary (e.g., totals / key monthly costs) so the collapsed state still communicates the essential values, enabling “scan all sections” on one screen.
+    - Verify the layout at the editor panel sizes (`min(1280px, 96vw)` × `min(920px, 94vh)`) and common breakpoints to ensure all primary sections remain usable without excessive scrolling.
+17. Standardize ScenarioForm inputs to a grid-based layout for consistent density and scanability:
+    - Unify section bodies to use `form-section--grid` (or a new shared grid class) for all input groups (基本情報 / 住宅 / 車 / 生活費 / 貯蓄 / イベント / 住人内サブフォーム), avoiding mixed “grid vs. stacked” layouts that look inconsistent.
+    - For list-style editors (住居/車/貯蓄/イベント), render each item card body as a grid (e.g., `collapsible-card__body form-section--grid`) and reserve stacked layout only for free-form text areas or long descriptions.
+    - Define responsive grid rules once in CSS (min column width + auto-fit) and reuse everywhere; ensure action rows (preset/add/remove) span full width via a `grid-column: 1 / -1` utility so buttons don’t distort the grid.
+    - Introduce a shared “field group” pattern (e.g., `fieldset` + legend or a small heading row) to visually separate logically related numeric inputs inside a grid without adding large padding/margins.
+    - Validate keyboard navigation and readability: tab order remains logical, labels stay attached, and no field becomes too narrow on smaller widths (fallback to 1-column when needed).
+18. Improve UI scanability with color + icons while keeping the app dependency-light:
+    - Add a small internal icon set as inline SVG React components (no external icon library) for section headings and key metrics (住人/住宅/車/生活/貯蓄/イベント/グラフ).
+    - Introduce a semantic color system via CSS variables (e.g., `--c-income`, `--c-housing`, `--c-vehicle`, `--c-warning`) aligned with existing chart colors; use it consistently for badges, pills, and section accents.
+    - Apply subtle section accents: a left border or header chip color matching the section domain (住宅=green, 車=purple, 教育=orange, 生活=blue, 貯蓄=pink) to visually group related inputs without overwhelming the screen.
+    - Add “summary badges” next to section titles (icon + short text) using the same semantic colors; ensure contrast and avoid relying on color alone (icon/text redundancy).
+    - Ensure accessibility: `aria-label` for icon-only controls, sufficient contrast ratios, and a “reduced color” fallback (e.g., grayscale mode) by swapping CSS variables.
+    - Validate that colors do not clash with the charts and that the compact mode remains readable; keep styling changes localized to `app/src/App.css` (or a dedicated `theme.css`) and small reusable UI components.
+19. Refine collapsed section summaries so key values remain visible when sections are folded:
+    - Residents: show the number of residents plus the primary resident’s take-home annual income (or total across residents), e.g. `2人 / 手取り 620万/年`.
+    - Housing / Vehicles / Living / Savings contribution: format summaries as `月額(年額)` with the annual in parentheses, e.g. `12.0万(144万)`; use consistent rounding and units (`万`).
+    - Apply the same pattern across sections: `住宅コスト` (active plan), `車一覧` (sum across vehicles), `生活費` (current year), `積立費` (sum across accounts).
+    - Keep summaries short and stable: prefer current/default-year values, avoid long lists, and clamp overflow with ellipsis.
+    - Add unit helpers (e.g., `formatManYenMonthlyAnnual`) shared by ScenarioForm so summary formatting is consistent and easy to change.
+20. Add monthly living cost inputs and living presets:
+    - Switch “生活費” inputs from annual to monthly entry while keeping the stored schema in annual yen (convert `monthly * 12` into `living.*Annual` fields to avoid simulation engine changes).
+    - Add a living preset catalog (`app/public/presets/living.json`) plus a preset picker dialog (similar to housing/vehicle/savings) that applies monthly templates into the annual fields.
+    - Ensure backward compatibility: existing scenarios with annual living costs display correctly as derived monthly values.
+21. Support time-phased living costs (life-stage based changes):
+    - Replace single `living` profile with a list of living cost periods (e.g., `livingPlans[]`) each with start/end year offsets (or ages), monthly amounts, and an optional inflation rate override.
+    - Update the simulation engine to compute living cost per year by selecting the active living plan for the year (fallback to legacy `living` if plans are absent for backward compatibility).
+    - Update the ScenarioForm “生活費” section to manage multiple periods (add/remove/duplicate), with compact summaries showing which years each plan applies; keep monthly entry UX.
+    - Extend living presets to optionally insert a multi-period template (e.g., “育児期→通常期”) as well as single-period presets.
+    - Migration: on load, auto-convert legacy `living` into a single `livingPlans[0]` entry spanning the full horizon so existing saved data continues to work without user intervention.
 
 ## Validation and Acceptance
 

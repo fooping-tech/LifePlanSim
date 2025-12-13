@@ -1,0 +1,62 @@
+[
+  {
+    "id": "compact-loan",
+    "title": "コンパクトカー（5年ローン）",
+    "description": "車両価格200万円を5年ローンで組む一般的な家族車モデル。",
+    "profile": {
+      "id": "",
+      "label": "コンパクトカー",
+      "purchaseYear": 2024,
+      "purchasePrice": 2000000,
+      "disposalYear": 2029,
+      "disposalValue": 800000,
+      "loanRemaining": 1200000,
+      "monthlyLoan": 35000,
+      "inspectionCycleYears": 2,
+      "inspectionCost": 110000,
+      "maintenanceAnnual": 80000,
+      "parkingMonthly": 15000,
+      "insuranceAnnual": 70000
+    }
+  },
+  {
+    "id": "minivan-cash",
+    "title": "ミニバン（現金一括）",
+    "description": "350万円のミニバンを現金で購入し維持費のみを計上するプラン。",
+    "profile": {
+      "id": "",
+      "label": "ミニバン",
+      "purchaseYear": 2023,
+      "purchasePrice": 3500000,
+      "disposalYear": 2033,
+      "disposalValue": 1000000,
+      "loanRemaining": 0,
+      "monthlyLoan": 0,
+      "inspectionCycleYears": 2,
+      "inspectionCost": 130000,
+      "maintenanceAnnual": 120000,
+      "parkingMonthly": 18000,
+      "insuranceAnnual": 95000
+    }
+  },
+  {
+    "id": "kei-car",
+    "title": "軽自動車（ローコスト）",
+    "description": "維持費を抑えたい都市部利用者向けの軽自動車モデル。",
+    "profile": {
+      "id": "",
+      "label": "軽自動車",
+      "purchaseYear": 2025,
+      "purchasePrice": 1400000,
+      "disposalYear": 2031,
+      "disposalValue": 400000,
+      "loanRemaining": 600000,
+      "monthlyLoan": 22000,
+      "inspectionCycleYears": 2,
+      "inspectionCost": 90000,
+      "maintenanceAnnual": 50000,
+      "parkingMonthly": 10000,
+      "insuranceAnnual": 60000
+    }
+  }
+]
