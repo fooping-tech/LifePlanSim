@@ -22,11 +22,38 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-width: 0;
 }
 
 .app-topbar__subtitle {
   color: #cbd5f5;
   font-size: 0.75rem;
+}
+
+.topbar-badge {
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+  border-radius: 999px;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.7rem;
+  letter-spacing: normal;
+  white-space: nowrap;
+}
+
+.topbar-pill {
+  border: 1px solid rgba(34, 197, 94, 0.7);
+  background: rgba(34, 197, 94, 0.15);
+  color: #dcfce7;
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.topbar-pill:hover {
+  background: rgba(34, 197, 94, 0.25);
+  border-color: rgba(34, 197, 94, 0.85);
 }
 
 .app-topbar__actions {

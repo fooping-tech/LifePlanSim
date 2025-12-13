@@ -126,6 +126,14 @@ Milestone 4 (Validation & UX refinements) adds guardrails: highlight years where
     - Add a GitHub Actions workflow that builds the app from `app/` and deploys `app/dist` to Pages using `actions/upload-pages-artifact` + `actions/deploy-pages`.
     - Configure Vite `base` for Pages (repository subpath) so assets resolve correctly at `https://<user>.github.io/<repo>/` (use an env-driven base such as `process.env.VITE_BASE` or derive from `GITHUB_REPOSITORY` during CI).
     - Document deployment prerequisites: Pages source “GitHub Actions”, default branch build, and (optionally) custom domain notes in the root `README.md`.
+23. Surface a build/version identifier in the top bar and make updates discoverable:
+    - Define a single “Build ID” string exposed to the client (prefer `VITE_BUILD_ID`) and embed it into the UI top bar (e.g., `v0.1.0+<short_sha>` or `2025-12-13.1`).
+    - Populate `VITE_BUILD_ID` during CI builds (GitHub Actions) from `${{ github.sha }}` (short) and/or run number; keep local dev fallback to `app/package.json` version.
+    - Add a lightweight “更新チェック” mechanism:
+      - Option A (simple): fetch `./version.json` from the deployed site (generated at build time) and compare to the current Build ID; show a small “更新あり / 再読み込み” pill.
+      - Option B (no extra file): poll `ETag`/`Last-Modified` of `index.html` (may be cache/CDN dependent) and prompt reload when changed.
+    - For GitHub Pages caching behavior, recommend a “hard refresh” button that calls `location.reload()` and optionally clears Service Worker caches if introduced later.
+    - Keep the feature dependency-free; implement as a small `useBuildInfo()` hook + topbar UI badge.
 
 ## Validation and Acceptance
 

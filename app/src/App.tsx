@@ -3,9 +3,11 @@ import './App.css'
 import { ScenarioList } from '@components/ScenarioList'
 import { ScenarioForm } from '@components/ScenarioForm'
 import { ScenarioResultsTabs } from '@components/ScenarioResultsTabs'
+import { useBuildInfo } from '@hooks/useBuildInfo'
 
 function App() {
   const [isEditorOpen, setEditorOpen] = useState(false)
+  const { local, updateAvailable, reload } = useBuildInfo()
 
   return (
     <div className="app-shell">
@@ -13,6 +15,14 @@ function App() {
         <div className="app-topbar__title">
           <strong>Life Plan Simulator</strong>
           <span className="app-topbar__subtitle">家計の将来設計をブラウザで比較</span>
+          <span className="topbar-badge" aria-label={`ビルド ${local.label}`}>
+            {local.label}
+          </span>
+          {updateAvailable ? (
+            <button type="button" className="topbar-pill" onClick={reload}>
+              更新あり / 再読み込み
+            </button>
+          ) : null}
         </div>
         <div className="app-topbar__actions">
           <button type="button" className="topbar-btn" onClick={() => setEditorOpen(true)}>

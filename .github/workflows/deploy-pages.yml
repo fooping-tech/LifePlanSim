@@ -36,6 +36,7 @@ jobs:
         working-directory: app
         env:
           VITE_BASE: /${{ github.event.repository.name }}/
+          VITE_BUILD_ID: ${{ github.run_number }}-${{ github.sha }}
         run: npm run build
 
       - name: SPA fallback (optional)
