@@ -11,6 +11,7 @@ import {
   persistScenariosToStorage,
 } from '@utils/persistence'
 import { createId } from '@utils/id'
+import type { JobPhase } from '@models/resident'
 
 interface ScenarioStoreState {
   scenarios: Scenario[]
@@ -151,7 +152,39 @@ const ensureScenarioDefaults = (scenario: Scenario): Scenario => {
     vehicles: [],
     ...scenario,
     housingPlans: normalizedHousingPlans,
-    residents: scenario.residents ?? [],
+    residents:
+      scenario.residents?.map((resident) => {
+        const normalizedJobs: JobPhase[] = (() => {
+          if (resident.jobs?.length) {
+            return resident.jobs.map((job) => ({
+              id: job.id ?? createId('job'),
+              type: job.type ?? 'employee',
+              label: job.label ?? '会社員',
+              startAge: job.startAge ?? resident.currentAge,
+              endAge: job.endAge,
+              netIncomeAnnual: job.netIncomeAnnual ?? resident.baseNetIncome ?? 0,
+              annualGrowthRate: job.annualGrowthRate ?? resident.annualIncomeGrowthRate ?? 0,
+            }))
+          }
+          return [
+            {
+              id: createId('job'),
+              type: 'employee',
+              label: '会社員',
+              startAge: resident.currentAge ?? 0,
+              endAge: resident.retirementAge,
+              netIncomeAnnual: resident.baseNetIncome ?? 0,
+              annualGrowthRate: resident.annualIncomeGrowthRate ?? 0,
+            },
+          ]
+        })()
+        return {
+          ...resident,
+          incomeEvents: resident.incomeEvents ?? [],
+          expenseBands: resident.expenseBands ?? [],
+          jobs: normalizedJobs,
+        }
+      }) ?? [],
     savingsAccounts: scenario.savingsAccounts ?? [],
     livingPlans: normalizedLivingPlans,
     living: {

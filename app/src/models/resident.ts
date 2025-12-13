@@ -23,6 +23,18 @@ export interface ExpenseBand {
   notes?: string
 }
 
+export type JobType = 'employee' | 'civilService' | 'selfEmployed' | 'partTime' | 'unemployed' | 'pension'
+
+export interface JobPhase {
+  id: string
+  type: JobType
+  label: string
+  startAge: number
+  endAge?: number
+  netIncomeAnnual: number
+  annualGrowthRate: number
+}
+
 export interface Resident {
   id: string
   name: string
@@ -31,6 +43,7 @@ export interface Resident {
   baseNetIncome: number
   annualIncomeGrowthRate: number
   dependents?: number
+  jobs?: JobPhase[]
   incomeEvents: IncomeEvent[]
   expenseBands: ExpenseBand[]
 }

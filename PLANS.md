@@ -18,6 +18,7 @@ Deliver a browser-based interactive simulator that lets households model long-te
 - [x] (2025-12-13) Expanded JSON import/export flows with scenario-level export plus append/replace imports.
 - [x] (2025-12-13) Added optional slider controls for key numeric inputs in the editor.
 - [x] (2025-12-13) Improved net worth chart: axis padding, hover crosshair + ages tooltip, and reveal animation.
+- [x] (2025-12-13) Added resident career phases (job change + pension) via `jobs[]` and updated income projection.
 
 ## Surprises & Discoveries
 
@@ -201,7 +202,41 @@ Milestone 4 (Validation & UX refinements) adds guardrails: highlight years where
     - Add left-to-right reveal animation when the chart is shown:
       - Use Victory’s `animate` prop (if applicable) for line drawing, or implement a simple clip-path mask that expands from left to right on mount.
       - Respect reduced motion: disable animation when `prefers-reduced-motion: reduce` is set (or when “色を抑える” mode is enabled if you choose to reuse that).
-      - Acceptance: On opening the results tab, the net-worth line reveals smoothly; no jank; reduced-motion users see no animation.
+    - Acceptance: On opening the results tab, the net-worth line reveals smoothly; no jank; reduced-motion users see no animation.
+28. Add “職業/キャリア” modeling for residents (job-based income phases, job changes, and pension switch):
+    - Goal: Make `手取り年収`, `退職年齢`, `年次上昇率` configurable per “職業” and allow transitions such as job changes (転職) and switching to pension income.
+    - Data model (minimal, backward-compatible):
+      - Add `Resident.jobs?: JobPhase[]` where each phase defines:
+        - `id`, `label` (e.g., “会社員”, “公務員”, “自営業”, “年金”)
+        - `startAge` / `endAge?`
+        - `netIncomeAnnual` (base take-home for the phase)
+        - `annualGrowthRate` (phase-specific growth)
+        - Optional: `bonusAnnual?`, `retirementAllowance?` (if you want to model separately later)
+      - Keep legacy fields `baseNetIncome`, `annualIncomeGrowthRate`, `retirementAge` for existing saved data:
+        - Migration: on load, if `jobs` is missing, synthesize a single phase from legacy values (start at currentAge, end at retirementAge).
+    - Presets / selection UX:
+      - Provide a small “職業テンプレート” catalog (JSON + hook) similar to other presets:
+        - 会社員（昇給あり）, 公務員（安定）, 自営業（変動少）, パート, 無職, 年金受給
+      - In the 住人カードに “職業/キャリア” セクション:
+        - Add button: “職業を追加” / “プリセットから追加”
+        - Each job phase is a compact card row (start/end age, 年収, 上昇率) with optional slider support.
+        - Add “転職” UX: duplicate current phase and set next startAge = previous endAge + 1.
+        - Add “年金に切り替え” shortcut: append a “年金” phase starting at a chosen age with configurable pension amount and (usually) 0% growth.
+    - Simulation engine changes:
+      - Update income computation to use active `jobs` phase for each year:
+        - Determine age per resident per year; select the phase where `startAge <= age <= endAge` (or last started if endAge omitted).
+        - Income = phase.netIncomeAnnual grown by phase.annualGrowthRate since phase start.
+      - Retire/stop salary is naturally modeled by phase end; pension modeled by a “年金” phase.
+      - Keep existing `incomeEvents` as additive adjustments on top of job phase income (bonuses, one-offs).
+    - Validation rules:
+      - Prevent overlapping phases; ensure phases cover at least currentAge..horizon (or allow gaps that yield 0 income).
+      - Provide inline warnings when `startAge > endAge` or when phases overlap.
+    - Import/export and snapshots:
+      - Include `jobs` in scenario JSON (already works via plain objects).
+      - Ensure migration keeps old JSON files valid.
+    - Acceptance:
+      - A resident can represent: “会社員(35–45) → 転職(46–60) → 年金(65〜)” with different net income/growth.
+      - Charts/tables update correctly and no legacy scenarios break.
 
 ## Validation and Acceptance
 

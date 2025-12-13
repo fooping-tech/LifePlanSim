@@ -5,7 +5,7 @@ import type {
   SavingsAccount,
   VehicleProfile,
 } from '@models/finance'
-import type { ExpenseBand, IncomeEvent, Resident } from '@models/resident'
+import type { ExpenseBand, IncomeEvent, JobPhase, Resident } from '@models/resident'
 import type {
   Projection,
   Scenario,
@@ -84,7 +84,11 @@ export const projectIncome = (resident: Resident, horizonYears: number): YearlyI
     const age = resident.currentAge + yearIndex
     let total = 0
     const triggeredEvents: string[] = []
-    if (age <= resident.retirementAge) {
+    const activeJob = selectActiveJobPhase(resident.jobs, age)
+    if (activeJob) {
+      const elapsed = Math.max(0, age - activeJob.startAge)
+      total = activeJob.netIncomeAnnual * Math.pow(1 + activeJob.annualGrowthRate, elapsed)
+    } else if (age <= resident.retirementAge) {
       const yearsWorked = Math.max(0, age - resident.currentAge)
       total = resident.baseNetIncome * Math.pow(1 + resident.annualIncomeGrowthRate, yearsWorked)
     }
@@ -101,6 +105,25 @@ export const projectIncome = (resident: Resident, horizonYears: number): YearlyI
     })
   }
   return series
+}
+
+const selectActiveJobPhase = (jobs: JobPhase[] | undefined, age: number): JobPhase | undefined => {
+  if (!jobs?.length) {
+    return undefined
+  }
+  const candidates = jobs.filter((job) => {
+    if (age < job.startAge) {
+      return false
+    }
+    if (typeof job.endAge === 'number' && age > job.endAge) {
+      return false
+    }
+    return true
+  })
+  if (!candidates.length) {
+    return undefined
+  }
+  return candidates.reduce((latest, job) => (job.startAge >= latest.startAge ? job : latest))
 }
 
 const shouldTriggerIncomeEvent = (

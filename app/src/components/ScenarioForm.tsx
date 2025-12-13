@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Controller, useFieldArray, useForm, useWatch } from 'react-hook-form'
 import type { Control, UseFormRegister, UseFormSetValue } from 'react-hook-form'
 import type { Scenario } from '@models/scenario'
-import type { Resident } from '@models/resident'
+import type { JobPhase, JobType, Resident } from '@models/resident'
 import type { HousingPlan, LivingPlan, SavingsAccount, VehicleProfile } from '@models/finance'
 import { EducationPresetDialog } from '@components/EducationPresetDialog'
 import { ResidentPresetDialog } from '@components/ResidentPresetDialog'
@@ -47,6 +47,34 @@ const formatManYenMonthlyAnnual = (annualYen: number): string => {
   const annual = Number.isFinite(annualYen) ? annualYen : 0
   const monthly = annual / 12
   return `月額${formatManYen(monthly, 1)}万(年額${formatManYen(annual, 0)}万)`
+}
+
+const JOB_TEMPLATES: Record<JobType, { label: string; annualGrowthRate: number }> = {
+  employee: { label: '会社員', annualGrowthRate: 0.025 },
+  civilService: { label: '公務員', annualGrowthRate: 0.015 },
+  selfEmployed: { label: '自営業', annualGrowthRate: 0.01 },
+  partTime: { label: 'パート', annualGrowthRate: 0 },
+  unemployed: { label: '無職', annualGrowthRate: 0 },
+  pension: { label: '年金', annualGrowthRate: 0 },
+}
+
+const selectActiveJobPhase = (jobs: JobPhase[] | undefined, age: number): JobPhase | undefined => {
+  if (!jobs?.length) {
+    return undefined
+  }
+  const candidates = jobs.filter((job) => {
+    if (age < job.startAge) {
+      return false
+    }
+    if (typeof job.endAge === 'number' && age > job.endAge) {
+      return false
+    }
+    return true
+  })
+  if (!candidates.length) {
+    return undefined
+  }
+  return candidates.reduce((latest, job) => (job.startAge >= latest.startAge ? job : latest))
 }
 
 export const ScenarioForm = () => {
@@ -172,9 +200,23 @@ export const ScenarioForm = () => {
   }
 
   const handleApplyResidentPreset = (presetResident: Resident) => {
+    const defaultJob: JobPhase = {
+      id: createId('job'),
+      type: 'employee',
+      label: JOB_TEMPLATES.employee.label,
+      startAge: presetResident.currentAge ?? 0,
+      endAge: presetResident.retirementAge,
+      netIncomeAnnual: presetResident.baseNetIncome ?? 0,
+      annualGrowthRate: presetResident.annualIncomeGrowthRate ?? JOB_TEMPLATES.employee.annualGrowthRate,
+    }
     appendResident({
       ...presetResident,
       id: createId('resident'),
+      jobs:
+        presetResident.jobs?.map((job) => ({
+          ...job,
+          id: createId('job'),
+        })) ?? [defaultJob],
       incomeEvents: presetResident.incomeEvents?.map((event) => ({
         ...event,
         id: createId('event'),
@@ -238,7 +280,10 @@ export const ScenarioForm = () => {
         if (!residents.length) {
           return null
         }
-        const total = residents.reduce((sum, resident) => sum + (resident.baseNetIncome ?? 0), 0)
+        const total = residents.reduce((sum, resident) => {
+          const active = selectActiveJobPhase(resident.jobs, resident.currentAge)
+          return sum + (active?.netIncomeAnnual ?? resident.baseNetIncome ?? 0)
+        }, 0)
         return `${residents.length}人 / 手取り${formatManYen(total, 0)}万/年`
       }
       case 'housing-costs': {
@@ -408,6 +453,17 @@ export const ScenarioForm = () => {
                   retirementAge: 65,
                   baseNetIncome: 5000000,
                   annualIncomeGrowthRate: 0.02,
+                  jobs: [
+                    {
+                      id: createId('job'),
+                      type: 'employee',
+                      label: JOB_TEMPLATES.employee.label,
+                      startAge: 35,
+                      endAge: 65,
+                      netIncomeAnnual: 5000000,
+                      annualGrowthRate: 0.02,
+                    },
+                  ],
                   incomeEvents: [],
                   expenseBands: [],
                 })
@@ -1926,6 +1982,7 @@ const ResidentCard = ({
   onToggle,
 }: ResidentCardProps) => {
   const resident = useWatch({ control, name: `residents.${index}` as const }) as Resident | undefined
+  const jobPhases = (resident?.jobs ?? []) as JobPhase[]
   const {
     fields: incomeEventFields,
     append: appendIncomeEvent,
@@ -1933,6 +1990,16 @@ const ResidentCard = ({
   } = useFieldArray({
     control,
     name: `residents.${index}.incomeEvents` as const,
+    keyName: 'fieldKey',
+  })
+
+  const {
+    fields: jobFields,
+    append: appendJob,
+    remove: removeJob,
+  } = useFieldArray({
+    control,
+    name: `residents.${index}.jobs` as const,
     keyName: 'fieldKey',
   })
 
@@ -2027,67 +2094,228 @@ const ResidentCard = ({
               ) : null}
             </label>
           </div>
-          <div className="grid-2 grid-span-all">
-            <label>
-              手取り収入（年）
-              <Controller
-                control={control}
-                name={`residents.${index}.baseNetIncome` as const}
-                render={({ field }) => (
-                  <YenInput
-                    value={field.value}
-                    ariaLabel="手取り収入（年）"
-                    onChange={(next) => field.onChange(next)}
-                    onBlur={() => field.onBlur()}
-                  />
-                )}
-              />
-              {sliderMode ? (
-                <SliderControl
-                  ariaLabel="手取り収入（年）"
-                  value={Number(resident?.baseNetIncome ?? 0)}
-                  min={0}
-                  max={autoMax(Number(resident?.baseNetIncome ?? 0), 20_000_000)}
-                  step={100_000}
-                  fineStep={10_000}
-                  onChange={(next) =>
-                    setValue(`residents.${index}.baseNetIncome` as const, clampNumber(next, 0, 1_000_000_000), {
+          <details open className="grid-span-all">
+            <summary>職業・キャリア（転職/年金）</summary>
+            <div className="action-row">
+              <button
+                type="button"
+                onClick={() =>
+                  appendJob({
+                    id: createId('job'),
+                    type: 'employee',
+                    label: '会社員',
+                    startAge: resident?.currentAge ?? 0,
+                    endAge: resident?.retirementAge ?? 65,
+                    netIncomeAnnual: resident?.baseNetIncome ?? 0,
+                    annualGrowthRate: resident?.annualIncomeGrowthRate ?? JOB_TEMPLATES.employee.annualGrowthRate,
+                  })
+                }
+              >
+                + 職業を追加
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const last = jobPhases.at(-1)
+                  if (!last) {
+                    appendJob({
+                      id: createId('job'),
+                      type: 'employee',
+                      label: '会社員',
+                      startAge: resident?.currentAge ?? 0,
+                      endAge: resident?.retirementAge ?? 65,
+                      netIncomeAnnual: resident?.baseNetIncome ?? 0,
+                      annualGrowthRate: resident?.annualIncomeGrowthRate ?? JOB_TEMPLATES.employee.annualGrowthRate,
+                    })
+                    return
+                  }
+                  const nextStart = typeof last.endAge === 'number' ? last.endAge + 1 : last.startAge + 1
+                  if (typeof last.endAge !== 'number') {
+                    setValue(`residents.${index}.jobs.${jobPhases.length - 1}.endAge` as const, nextStart - 1, {
                       shouldDirty: true,
                       shouldTouch: true,
                     })
                   }
-                  formatValue={(yen) => `年額${formatManYen(yen, 0)}万`}
-                />
-              ) : null}
-            </label>
-            <label>
-              年次上昇率
-              <input
-                type="number"
-                step="0.01"
-                {...register(`residents.${index}.annualIncomeGrowthRate` as const, {
-                  valueAsNumber: true,
+                  appendJob({
+                    id: createId('job'),
+                    type: last.type,
+                    label: `${last.label} (転職)`,
+                    startAge: nextStart,
+                    endAge: undefined,
+                    netIncomeAnnual: last.netIncomeAnnual,
+                    annualGrowthRate: last.annualGrowthRate,
+                  })
+                }}
+              >
+                転職を追加
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const last = jobPhases.at(-1)
+                  const baseStart = typeof last?.endAge === 'number' ? last.endAge + 1 : (resident?.retirementAge ?? 65) + 1
+                  const startAge = Math.max(65, baseStart)
+                  if (last && typeof last.endAge !== 'number') {
+                    setValue(`residents.${index}.jobs.${jobPhases.length - 1}.endAge` as const, startAge - 1, {
+                      shouldDirty: true,
+                      shouldTouch: true,
+                    })
+                  }
+                  appendJob({
+                    id: createId('job'),
+                    type: 'pension',
+                    label: '年金',
+                    startAge,
+                    endAge: undefined,
+                    netIncomeAnnual: 1_800_000,
+                    annualGrowthRate: 0,
+                  })
+                }}
+              >
+                年金に切り替え
+              </button>
+            </div>
+            {jobFields.length ? (
+              <>
+                {(() => {
+                  const sorted = [...jobPhases].sort((a, b) => a.startAge - b.startAge)
+                  const overlaps = sorted.some((job, idx) => {
+                    if (idx === 0) return false
+                    const prev = sorted[idx - 1]
+                    const prevEnd = typeof prev.endAge === 'number' ? prev.endAge : prev.startAge
+                    return job.startAge <= prevEnd
+                  })
+                  return overlaps ? <p className="warning">職業の期間が重複しています（開始/終了年齢を調整してください）</p> : null
+                })()}
+                {jobFields.map((field, jobIndex) => {
+                  const job = jobPhases[jobIndex]
+                  return (
+                    <div key={field.fieldKey ?? field.id ?? jobIndex} className="inline-card">
+                      <label>
+                        種別
+                        <select
+                          {...register(`residents.${index}.jobs.${jobIndex}.type` as const)}
+                          onChange={(event) => {
+                            const nextType = event.target.value as JobType
+                            const template = JOB_TEMPLATES[nextType]
+                            setValue(`residents.${index}.jobs.${jobIndex}.type` as const, nextType, {
+                              shouldDirty: true,
+                              shouldTouch: true,
+                            })
+                            setValue(`residents.${index}.jobs.${jobIndex}.label` as const, template.label, {
+                              shouldDirty: true,
+                              shouldTouch: true,
+                            })
+                            if (!Number.isFinite(job?.annualGrowthRate) || job?.annualGrowthRate === 0) {
+                              setValue(
+                                `residents.${index}.jobs.${jobIndex}.annualGrowthRate` as const,
+                                template.annualGrowthRate,
+                                { shouldDirty: true, shouldTouch: true },
+                              )
+                            }
+                          }}
+                        >
+                          <option value="employee">会社員</option>
+                          <option value="civilService">公務員</option>
+                          <option value="selfEmployed">自営業</option>
+                          <option value="partTime">パート</option>
+                          <option value="unemployed">無職</option>
+                          <option value="pension">年金</option>
+                        </select>
+                      </label>
+                      <label>
+                        名称
+                        <input {...register(`residents.${index}.jobs.${jobIndex}.label` as const)} />
+                      </label>
+                      <label>
+                        開始年齢
+                        <input
+                          type="number"
+                          {...register(`residents.${index}.jobs.${jobIndex}.startAge` as const, { valueAsNumber: true })}
+                        />
+                      </label>
+                      <label>
+                        終了年齢
+                        <input
+                          type="number"
+                          {...register(`residents.${index}.jobs.${jobIndex}.endAge` as const, {
+                            setValueAs: (value) => (value === '' || value === null ? undefined : Number(value)),
+                          })}
+                        />
+                      </label>
+                      <label>
+                        手取り年収
+                        <Controller
+                          control={control}
+                          name={`residents.${index}.jobs.${jobIndex}.netIncomeAnnual` as const}
+                          render={({ field: incomeField }) => (
+                            <YenInput
+                              value={incomeField.value}
+                              ariaLabel="手取り年収"
+                              onChange={(next) => incomeField.onChange(next)}
+                              onBlur={() => incomeField.onBlur()}
+                            />
+                          )}
+                        />
+                        {sliderMode ? (
+                          <SliderControl
+                            ariaLabel="手取り年収"
+                            value={Number(job?.netIncomeAnnual ?? 0)}
+                            min={0}
+                            max={autoMax(Number(job?.netIncomeAnnual ?? 0), 20_000_000)}
+                            step={100_000}
+                            fineStep={10_000}
+                            onChange={(next) => {
+                              const clamped = clampNumber(next, 0, 1_000_000_000)
+                              setValue(`residents.${index}.jobs.${jobIndex}.netIncomeAnnual` as const, clamped, {
+                                shouldDirty: true,
+                                shouldTouch: true,
+                              })
+                            }}
+                            formatValue={(yen) => `年額${formatManYen(yen, 0)}万`}
+                          />
+                        ) : null}
+                      </label>
+                      <label>
+                        年次上昇率
+                        <input
+                          type="number"
+                          step="0.005"
+                          inputMode="decimal"
+                          {...register(`residents.${index}.jobs.${jobIndex}.annualGrowthRate` as const, {
+                            valueAsNumber: true,
+                          })}
+                        />
+                        {sliderMode ? (
+                          <SliderControl
+                            ariaLabel="年次上昇率"
+                            value={Number(job?.annualGrowthRate ?? 0)}
+                            min={0}
+                            max={0.1}
+                            step={0.005}
+                            fineStep={0.001}
+                            onChange={(next) => {
+                              const clamped = clampNumber(next, 0, 0.2)
+                              setValue(`residents.${index}.jobs.${jobIndex}.annualGrowthRate` as const, clamped, {
+                                shouldDirty: true,
+                                shouldTouch: true,
+                              })
+                            }}
+                            formatValue={(v) => `${Math.round(v * 1000) / 10}%`}
+                          />
+                        ) : null}
+                      </label>
+                      <button type="button" onClick={() => removeJob(jobIndex)}>
+                        ✕
+                      </button>
+                    </div>
+                  )
                 })}
-              />
-              {sliderMode ? (
-                <SliderControl
-                  ariaLabel="年次上昇率"
-                  value={Number(resident?.annualIncomeGrowthRate ?? 0)}
-                  min={0}
-                  max={0.1}
-                  step={0.005}
-                  fineStep={0.001}
-                  onChange={(next) =>
-                    setValue(`residents.${index}.annualIncomeGrowthRate` as const, clampNumber(next, 0, 0.2), {
-                      shouldDirty: true,
-                      shouldTouch: true,
-                    })
-                  }
-                  formatValue={(v) => `${Math.round(v * 1000) / 10}%`}
-                />
-              ) : null}
-            </label>
-          </div>
+              </>
+            ) : (
+              <p>職業が未設定です。「+ 職業を追加」から追加してください。</p>
+            )}
+          </details>
           <details open className="grid-span-all">
             <summary>収入イベント</summary>
             {incomeEventFields.map((field, eventIndex) => (
