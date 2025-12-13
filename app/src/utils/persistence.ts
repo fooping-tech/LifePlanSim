@@ -1,5 +1,6 @@
 import type { Scenario } from '@models/scenario'
-import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string'
+import { decompressFromEncodedURIComponent } from 'lz-string'
+import { gunzipSync, gzipSync, strFromU8, strToU8 } from 'fflate'
 
 const STORAGE_KEY = 'life-plan-sim/scenarios'
 
@@ -77,7 +78,8 @@ export const readScenarioFile = (file: File): Promise<Scenario[]> => {
 
 export const encodeSnapshot = (scenarios: Scenario[]): string => {
   const text = JSON.stringify(scenarios)
-  return compressToEncodedURIComponent(text)
+  const gz = gzipSync(strToU8(text))
+  return `g.${base64UrlEncode(gz)}`
 }
 
 export const decodeSnapshot = (snapshot: string): Scenario[] | null => {
@@ -85,6 +87,11 @@ export const decodeSnapshot = (snapshot: string): Scenario[] | null => {
     return null
   }
   try {
+    if (snapshot.startsWith('g.')) {
+      const bytes = base64UrlDecode(snapshot.slice(2))
+      const inflated = strFromU8(gunzipSync(bytes))
+      return coerceScenarioArray(JSON.parse(inflated))
+    }
     const inflated = decompressFromEncodedURIComponent(snapshot)
     if (inflated) {
       return coerceScenarioArray(JSON.parse(inflated))
@@ -104,12 +111,12 @@ export const extractSnapshotFromLocation = (): Scenario[] | null => {
     return null
   }
   const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''))
-  const hashEncoded = hashParams.get('snapshot')
+  const hashEncoded = hashParams.get('s') ?? hashParams.get('snapshot')
   if (hashEncoded) {
     return decodeSnapshot(hashEncoded)
   }
   const params = new URLSearchParams(window.location.search)
-  const encoded = params.get('snapshot')
+  const encoded = params.get('s') ?? params.get('snapshot')
   if (!encoded) {
     return null
   }
@@ -122,6 +129,31 @@ export const buildSnapshotUrl = (scenarios: Scenario[]): string => {
   }
   const encoded = encodeSnapshot(scenarios)
   const url = new URL(window.location.origin + window.location.pathname)
-  url.hash = `snapshot=${encoded}`
+  url.hash = `s=${encoded}`
   return url.toString()
+}
+
+const base64UrlEncode = (bytes: Uint8Array): string => {
+  if (typeof window !== 'undefined' && typeof window.btoa === 'function') {
+    let binary = ''
+    bytes.forEach((b) => {
+      binary += String.fromCharCode(b)
+    })
+    const b64 = window.btoa(binary)
+    return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
+  }
+  return Buffer.from(bytes).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
+}
+
+const base64UrlDecode = (text: string): Uint8Array => {
+  const padded = text.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(text.length / 4) * 4, '=')
+  if (typeof window !== 'undefined' && typeof window.atob === 'function') {
+    const binary = window.atob(padded)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i += 1) {
+      bytes[i] = binary.charCodeAt(i)
+    }
+    return bytes
+  }
+  return new Uint8Array(Buffer.from(padded, 'base64'))
 }

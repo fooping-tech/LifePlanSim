@@ -56,8 +56,8 @@ export const ScenarioList = () => {
       return
     }
     try {
-      if (link.length > 12000) {
-        setStatus('共有リンクが長すぎます。JSON書き出しをご利用ください。')
+      if (link.length > 50000) {
+        setStatus('共有リンクが長すぎます（上限超過）。JSON書き出しをご利用ください。')
         return
       }
       if (navigator.clipboard) {
