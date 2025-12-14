@@ -1,6 +1,7 @@
 import type { Scenario } from '@models/scenario'
 import { decompressFromEncodedURIComponent } from 'lz-string'
 import { gunzipSync, gzipSync, strFromU8, strToU8 } from 'fflate'
+import { sanitizeJsonText } from '@utils/sanitizeJsonText'
 
 const STORAGE_KEY = 'life-plan-sim/scenarios'
 
@@ -63,7 +64,8 @@ export const readScenarioFile = (file: File): Promise<Scenario[]> => {
     const reader = new FileReader()
     reader.onload = () => {
       try {
-        const data = JSON.parse(reader.result as string)
+        const raw = sanitizeJsonText(reader.result as string)
+        const data = JSON.parse(raw)
         const scenarios = coerceScenarioArray(data)
         if (!scenarios) {
           reject(new Error('Invalid scenario JSON format'))

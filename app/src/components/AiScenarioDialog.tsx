@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { Scenario } from '@models/scenario'
+import { sanitizeJsonText } from '@utils/sanitizeJsonText'
 
 type ApplyMode = 'append' | 'replace' | 'overwrite'
 
@@ -29,60 +30,178 @@ const coerceScenarioArray = (value: unknown): Scenario[] | null => {
 const buildPromptTemplate = (requestText: string) => {
   const nowYear = new Date().getFullYear()
   const request = requestText.trim() || '（ここに要望を入力してください）'
-  return `あなたは家計のライフプラン条件をJSONで作るアシスタントです。
-以下の要望から、Scenario(JSON)を1つ生成してください。
+  return `あなたは「Life Plan Simulator」用の Scenario(JSON) を作るアシスタントです。
+以下の要望から、Scenario(JSON)を1つだけ生成してください。
 
-重要:
-- 返答はJSONのみ（説明文/コードフェンス/箇条書きは禁止）
-- 通貨は日本円（数値は「円」単位）
-- 利率は小数（例: 5% -> 0.05）
-- id は省略してOK（アプリ側で付与します）
+最重要ルール（必ず守る）:
+1) 返答は JSON のみ（説明文/コードフェンス/箇条書きは禁止）
+2) 未定の値は 0 または妥当な推定を入れる（空欄を作らない）
+3) “このアプリのスキーマ” に存在しないキーは絶対に出さない（例: loanBalance / annualPayment / currentValue 等は禁止）
+4) 通貨は日本円（数値は「円」単位）、利率は小数（例: 1.68% -> 0.0168）
+5) id は省略してOK（アプリ側で付与）
 
 要望:
 ${request}
 
-出力スキーマ（目安）:
+スキーマの注意（よく間違える点）:
+- 住宅ローン:
+  - 住宅は housingPlans の type="own" を使う
+  - ローン残高は mortgageRemaining（円）
+  - 月々の支払いは monthlyMortgage（円/月）
+  - このアプリは“住宅ローン金利”を直接持たないので、金利情報は description に書くか、支払額（monthlyMortgage）に織り込むこと
+  - 管理費/修繕積立金は managementFeeMonthly / maintenanceReserveMonthly（円/月）。未指定なら推定して 0 にしない（例: 各1〜2万円/月）
+- 車:
+  - vehicles は「車ごとの年間コスト」と「購入/売却の年」を入れる
+  - 買い替えは vehicles に “今の車(売却年あり)” と “次の車(購入年あり)” の2台を入れて表現する
+  - purchaseYear / disposalYear は西暦（例: 2030）
+  - purchasePrice は購入時の一括支出（頭金など）。ローンは loanRemaining + monthlyLoan で表現
+- 教育費:
+  - 子どもは residents に “住人(子ども)” として追加し、教育費は子どもの expenseBands に入れる（カテゴリ category:"education"）
+  - residents[*].expenseBands の startAge/endAge は “その住人の年齢” で指定する
+  - 学費は「幼稚園/保育園 → 公立小 → 公立中 → 私立高 → 私立大」まで一通り入れる（未指定は相場感で埋めて 0 にしない）
+  - 子どもの年齢推定: 学年 + 6（小5=11歳、小3=9歳）として良い
+- 退職金:
+  - 退職金は residents[*].incomeEvents に {type:"retirement", triggerAge:退職年齢, amount:非0} として入れる
+  - 明示がない場合の相場感: 会社員なら 1,000万〜2,000万円/人 程度を目安に入れる（0にしない）
+- 貯蓄:
+  - initialCash は原則 0 にして、資産は savingsAccounts に全て入れる
+  - savingsAccounts.role は次のどれかのみ:
+    emergency / short_term / goal_education / goal_house / goal_other / long_term
+  - savingsAccounts.contributionPolicy は fixed か surplus_only のみ
+  - savingsAccounts.withdrawPolicy は normal / last_resort / never のみ
+
+厳格な出力テンプレ（このキーだけを使う）:
 {
   "name": "シナリオ名",
-  "description": "説明",
+  "description": "説明（住宅ローン金利など、スキーマ外の補足はここに記載）",
   "startYear": ${nowYear},
   "initialCash": 0,
   "residents": [
     {
-      "name": "住人名",
-      "currentAge": 35,
+      "name": "夫",
+      "currentAge": 40,
+      "retirementAge": 65,
+      "baseNetIncome": 8000000,
+      "annualIncomeGrowthRate": 0.01,
+      "dependents": 2,
+      "incomeEvents": [
+        { "label": "退職金", "amount": 15000000, "type": "retirement", "triggerAge": 65 }
+      ],
+      "expenseBands": []
+    },
+    {
+      "name": "妻",
+      "currentAge": 40,
       "retirementAge": 65,
       "baseNetIncome": 5000000,
-      "annualIncomeGrowthRate": 0.02,
+      "annualIncomeGrowthRate": 0.01,
+      "dependents": 2,
+      "incomeEvents": [
+        { "label": "退職金", "amount": 10000000, "type": "retirement", "triggerAge": 65 }
+      ],
+      "expenseBands": []
+    },
+    {
+      "name": "子1",
+      "currentAge": 11,
+      "retirementAge": 65,
+      "baseNetIncome": 0,
+      "annualIncomeGrowthRate": 0,
       "dependents": 0,
       "incomeEvents": [],
-      "expenseBands": []
+      "expenseBands": [
+        { "label": "幼稚園/保育園", "startAge": 3, "endAge": 5, "annualAmount": 400000, "category": "education" },
+        { "label": "公立小学校", "startAge": 6, "endAge": 11, "annualAmount": 150000, "category": "education" },
+        { "label": "公立中学校", "startAge": 12, "endAge": 14, "annualAmount": 200000, "category": "education" },
+        { "label": "私立高校", "startAge": 15, "endAge": 17, "annualAmount": 900000, "category": "education" },
+        { "label": "私立大学", "startAge": 18, "endAge": 21, "annualAmount": 1200000, "category": "education" }
+      ]
+    },
+    {
+      "name": "子2",
+      "currentAge": 9,
+      "retirementAge": 65,
+      "baseNetIncome": 0,
+      "annualIncomeGrowthRate": 0,
+      "dependents": 0,
+      "incomeEvents": [],
+      "expenseBands": [
+        { "label": "幼稚園/保育園", "startAge": 3, "endAge": 5, "annualAmount": 400000, "category": "education" },
+        { "label": "公立小学校", "startAge": 6, "endAge": 11, "annualAmount": 150000, "category": "education" },
+        { "label": "公立中学校", "startAge": 12, "endAge": 14, "annualAmount": 200000, "category": "education" },
+        { "label": "私立高校", "startAge": 15, "endAge": 17, "annualAmount": 900000, "category": "education" },
+        { "label": "私立大学", "startAge": 18, "endAge": 21, "annualAmount": 1200000, "category": "education" }
+      ]
     }
   ],
-  "housingPlans": [],
-  "vehicles": [],
+  "housingPlans": [
+    {
+      "label": "持ち家",
+      "type": "own",
+      "startYearOffset": 0,
+      "endYearOffset": null,
+      "builtYear": 2012,
+      "mortgageRemaining": 18000000,
+      "monthlyMortgage": 85000,
+      "managementFeeMonthly": 15000,
+      "maintenanceReserveMonthly": 12000,
+      "extraAnnualCosts": 200000,
+      "purchaseCost": 0,
+      "saleValue": 0
+    }
+  ],
+  "vehicles": [
+    {
+      "label": "VOXY",
+      "purchaseYear": ${nowYear - 8},
+      "purchasePrice": 0,
+      "loanRemaining": 0,
+      "monthlyLoan": 0,
+      "inspectionCycleYears": 2,
+      "inspectionCost": 120000,
+      "maintenanceAnnual": 120000,
+      "parkingMonthly": 12000,
+      "insuranceAnnual": 70000
+    },
+    {
+      "label": "買い替え後の車",
+      "purchaseYear": ${nowYear + 5},
+      "purchasePrice": 500000,
+      "disposalYear": null,
+      "disposalValue": 0,
+      "loanRemaining": 3500000,
+      "monthlyLoan": 60000,
+      "inspectionCycleYears": 2,
+      "inspectionCost": 120000,
+      "maintenanceAnnual": 120000,
+      "parkingMonthly": 12000,
+      "insuranceAnnual": 70000
+    }
+  ],
   "livingPlans": [
     {
-      "label": "生活費",
+      "label": "生活費（込み）",
       "startYearOffset": 0,
+      "endYearOffset": null,
       "baseAnnual": 0,
       "insuranceAnnual": 0,
       "utilitiesAnnual": 0,
       "discretionaryAnnual": 0,
-      "healthcareAnnual": 0
+      "healthcareAnnual": 0,
+      "inflationRate": 0.01
     }
   ],
   "savingsAccounts": [
     {
-      "label": "普通預金",
+      "label": "現金",
       "type": "deposit",
       "role": "emergency",
+      "contributionPolicy": "fixed",
+      "withdrawPolicy": "normal",
       "minBalance": 0,
       "balance": 0,
       "annualContribution": 0,
-      "annualInterestRate": 0.01,
-      "contributionPolicy": "fixed",
-      "withdrawPolicy": "normal",
+      "annualInterestRate": 0.001,
       "withdrawPriority": 0,
       "adjustable": true
     }
@@ -122,7 +241,7 @@ export const AiScenarioDialog = ({ isOpen, onClose, activeScenarioName, onApply 
 
   const handleValidate = () => {
     try {
-      const cleaned = stripCodeFences(response)
+      const cleaned = sanitizeJsonText(stripCodeFences(response))
       const data = JSON.parse(cleaned) as unknown
       const scenarios = coerceScenarioArray(data)
       if (!scenarios?.length) {

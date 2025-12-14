@@ -39,6 +39,8 @@ interface HousingCostBreakdown {
 
 interface VehicleCostBreakdown {
   total: number
+  purchase: number
+  disposalProceeds: number
   loan: number
   inspection: number
   maintenance: number
@@ -382,12 +384,15 @@ const selectActiveHousingPlan = (plans: HousingPlan[], yearIndex: number): Housi
 const computeVehicleCost = (
   vehicles: VehicleProfile[] | undefined,
   states: { loanRemaining: number }[] | undefined,
+  year: number,
   yearIndex: number,
   yearEvents: string[],
 ): VehicleCostBreakdown => {
   if (!vehicles?.length || !states?.length) {
-    return { total: 0, loan: 0, inspection: 0, maintenance: 0, parking: 0, insurance: 0 }
+    return { total: 0, purchase: 0, disposalProceeds: 0, loan: 0, inspection: 0, maintenance: 0, parking: 0, insurance: 0 }
   }
+  let purchase = 0
+  let disposalProceeds = 0
   let loan = 0
   let inspection = 0
   let maintenance = 0
@@ -395,6 +400,21 @@ const computeVehicleCost = (
   let insurance = 0
   vehicles.forEach((vehicle, idx) => {
     const state = states[idx]
+
+    const purchaseYear = vehicle.purchaseYear
+    const disposalYear = vehicle.disposalYear
+    const isOwned =
+      (typeof purchaseYear !== 'number' || year >= purchaseYear) &&
+      (typeof disposalYear !== 'number' || year <= disposalYear)
+    if (!isOwned) {
+      return
+    }
+
+    if (typeof purchaseYear === 'number' && year === purchaseYear && vehicle.purchasePrice > 0) {
+      purchase += vehicle.purchasePrice
+      yearEvents.push(`${vehicle.label}: 購入`)
+    }
+
     const yearlyLoanPayment =
       state.loanRemaining > 0 ? Math.min(vehicle.monthlyLoan * 12, state.loanRemaining) : 0
     state.loanRemaining = Math.max(0, state.loanRemaining - yearlyLoanPayment)
@@ -404,7 +424,9 @@ const computeVehicleCost = (
     }
     if (
       vehicle.inspectionCycleYears > 0 &&
-      yearIndex % vehicle.inspectionCycleYears === 0
+      (typeof purchaseYear === 'number'
+        ? (year - purchaseYear) > 0 && (year - purchaseYear) % vehicle.inspectionCycleYears === 0
+        : yearIndex > 0 && yearIndex % vehicle.inspectionCycleYears === 0)
     ) {
       inspection += vehicle.inspectionCost
       yearEvents.push(`${vehicle.label} 車検`)
@@ -412,9 +434,20 @@ const computeVehicleCost = (
     maintenance += vehicle.maintenanceAnnual
     parking += vehicle.parkingMonthly * 12
     insurance += vehicle.insuranceAnnual ?? 0
+
+    if (typeof disposalYear === 'number' && year === disposalYear) {
+      const proceeds = vehicle.disposalValue ?? 0
+      if (proceeds > 0) {
+        disposalProceeds += proceeds
+        yearEvents.push(`${vehicle.label}: 売却`)
+      } else {
+        yearEvents.push(`${vehicle.label}: 廃棄`)
+      }
+      state.loanRemaining = 0
+    }
   })
-  const total = loan + inspection + maintenance + parking + insurance
-  return { total, loan, inspection, maintenance, parking, insurance }
+  const total = purchase + loan + inspection + maintenance + parking + insurance
+  return { total, purchase, disposalProceeds, loan, inspection, maintenance, parking, insurance }
 }
 
 const applySavingsInterest = (accounts: SavingsAccountState[]): void => {
@@ -571,12 +604,15 @@ export const simulateScenario = (
       if (housingState) {
         housingState.mortgageRemaining = 0
       }
-      if (saleValue > 0 || remaining > 0) {
-        yearEvents.push(`${activeHousingPlan.label}: 売却`)
-      }
-      incomeForYear += netProceeds
+    if (saleValue > 0 || remaining > 0) {
+      yearEvents.push(`${activeHousingPlan.label}: 売却`)
     }
-    const vehicleCost = computeVehicleCost(scenario.vehicles, vehicleStates, yearIndex, yearEvents)
+    incomeForYear += netProceeds
+    }
+    const vehicleCost = computeVehicleCost(scenario.vehicles, vehicleStates, year, yearIndex, yearEvents)
+    if (vehicleCost.disposalProceeds > 0) {
+      incomeForYear += vehicleCost.disposalProceeds
+    }
     const bandExpenses = categorizeExpenses(expenseMap.get(yearIndex) ?? [])
 
     cashOnHand += incomeForYear

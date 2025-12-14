@@ -43,6 +43,59 @@ const bootstrapScenarios = (): Scenario[] => {
 }
 
 const ensureScenarioDefaults = (scenario: Scenario): Scenario => {
+  const normalizedResidents =
+    scenario.residents?.map((resident) => {
+      const normalizedJobs: JobPhase[] = (() => {
+        if (resident.jobs?.length) {
+          return resident.jobs.map((job) => ({
+            id: job.id ?? createId('job'),
+            type: job.type ?? 'employee',
+            label: job.label ?? '会社員',
+            startAge: job.startAge ?? resident.currentAge,
+            endAge: job.endAge,
+            netIncomeAnnual: job.netIncomeAnnual ?? resident.baseNetIncome ?? 0,
+            annualGrowthRate: job.annualGrowthRate ?? resident.annualIncomeGrowthRate ?? 0,
+          }))
+        }
+        return [
+          {
+            id: createId('job'),
+            type: 'employee',
+            label: '会社員',
+            startAge: resident.currentAge ?? 0,
+            endAge: resident.retirementAge,
+            netIncomeAnnual: resident.baseNetIncome ?? 0,
+            annualGrowthRate: resident.annualIncomeGrowthRate ?? 0,
+          },
+        ]
+      })()
+
+      return {
+        ...resident,
+        id: resident.id ?? createId('resident'),
+        incomeEvents: (resident.incomeEvents ?? []).map((event) => ({ ...event, id: event.id ?? createId('event') })),
+        expenseBands: (resident.expenseBands ?? []).map((band) => ({ ...band, id: band.id ?? createId('expense') })),
+        jobs: normalizedJobs,
+      }
+    }) ?? []
+
+  const normalizedVehicles =
+    scenario.vehicles?.map((vehicle) => ({
+      id: vehicle.id ?? createId('vehicle'),
+      label: vehicle.label ?? '車',
+      purchaseYear: vehicle.purchaseYear,
+      purchasePrice: vehicle.purchasePrice ?? 0,
+      disposalYear: vehicle.disposalYear,
+      disposalValue: vehicle.disposalValue ?? 0,
+      loanRemaining: vehicle.loanRemaining ?? 0,
+      monthlyLoan: vehicle.monthlyLoan ?? 0,
+      inspectionCycleYears: vehicle.inspectionCycleYears ?? 2,
+      inspectionCost: vehicle.inspectionCost ?? 100000,
+      maintenanceAnnual: vehicle.maintenanceAnnual ?? 60000,
+      parkingMonthly: vehicle.parkingMonthly ?? 0,
+      insuranceAnnual: vehicle.insuranceAnnual ?? 60000,
+    })) ?? []
+
   const normalizedHousingPlans = (() => {
     if (scenario.housingPlans?.length) {
       return scenario.housingPlans.map((plan) => {
@@ -202,42 +255,10 @@ const ensureScenarioDefaults = (scenario: Scenario): Scenario => {
     currency: 'JPY',
     expenseBands: [],
     customIncomeEvents: [],
-    vehicles: [],
     ...scenario,
     housingPlans: normalizedHousingPlans,
-    residents:
-      scenario.residents?.map((resident) => {
-        const normalizedJobs: JobPhase[] = (() => {
-          if (resident.jobs?.length) {
-            return resident.jobs.map((job) => ({
-              id: job.id ?? createId('job'),
-              type: job.type ?? 'employee',
-              label: job.label ?? '会社員',
-              startAge: job.startAge ?? resident.currentAge,
-              endAge: job.endAge,
-              netIncomeAnnual: job.netIncomeAnnual ?? resident.baseNetIncome ?? 0,
-              annualGrowthRate: job.annualGrowthRate ?? resident.annualIncomeGrowthRate ?? 0,
-            }))
-          }
-          return [
-            {
-              id: createId('job'),
-              type: 'employee',
-              label: '会社員',
-              startAge: resident.currentAge ?? 0,
-              endAge: resident.retirementAge,
-              netIncomeAnnual: resident.baseNetIncome ?? 0,
-              annualGrowthRate: resident.annualIncomeGrowthRate ?? 0,
-            },
-          ]
-        })()
-        return {
-          ...resident,
-          incomeEvents: resident.incomeEvents ?? [],
-          expenseBands: resident.expenseBands ?? [],
-          jobs: normalizedJobs,
-        }
-      }) ?? [],
+    residents: normalizedResidents,
+    vehicles: normalizedVehicles,
     savingsAccounts: normalizedSavingsAccounts,
     livingPlans: normalizedLivingPlans,
     living: {

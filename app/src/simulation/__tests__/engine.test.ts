@@ -144,6 +144,69 @@ describe('simulateScenario', () => {
     expect(firstYear.savingsByAccount.cash).toBeGreaterThan(0)
   })
 
+  it('models vehicle replacement using purchaseYear/disposalYear', () => {
+    const startYear = 2025
+    const projection = simulateScenario(
+      {
+        ...baseScenario,
+        startYear,
+        living: { ...baseScenario.living, baseAnnual: 0, insuranceAnnual: 0, utilitiesAnnual: 0, discretionaryAnnual: 0, healthcareAnnual: 0, inflationRate: 0 },
+        housing: {
+          builtYear: 2010,
+          mortgageRemaining: 0,
+          monthlyMortgage: 0,
+          managementFeeMonthly: 0,
+          maintenanceReserveMonthly: 0,
+          extraAnnualCosts: 0,
+        },
+        savingsAccounts: [
+          { ...baseScenario.savingsAccounts[0], id: 'cash', balance: 10_000_000, annualContribution: 0, annualInterestRate: 0 },
+        ],
+        vehicles: [
+          {
+            id: 'old',
+            label: '旧車',
+            purchaseYear: 2018,
+            purchasePrice: 0,
+            disposalYear: startYear + 2,
+            disposalValue: 300000,
+            loanRemaining: 0,
+            monthlyLoan: 0,
+            inspectionCycleYears: 2,
+            inspectionCost: 100000,
+            maintenanceAnnual: 60000,
+            parkingMonthly: 0,
+            insuranceAnnual: 60000,
+          },
+          {
+            id: 'new',
+            label: '新車',
+            purchaseYear: startYear + 3,
+            purchasePrice: 500000,
+            disposalYear: undefined,
+            disposalValue: 0,
+            loanRemaining: 0,
+            monthlyLoan: 0,
+            inspectionCycleYears: 2,
+            inspectionCost: 100000,
+            maintenanceAnnual: 60000,
+            parkingMonthly: 0,
+            insuranceAnnual: 60000,
+          },
+        ],
+      },
+      { horizonYears: 6 },
+    )
+
+    const year0 = projection.yearly[0]
+    const year2 = projection.yearly[2]
+    const year3 = projection.yearly[3]
+
+    expect(year0.events.join(' ')).not.toContain('新車: 購入')
+    expect(year2.events.join(' ')).toContain('旧車: 売却')
+    expect(year3.events.join(' ')).toContain('新車: 購入')
+  })
+
   it('covers deficits respecting emergency minBalance and last-resort rules', () => {
     const projection = simulateScenario(
       {
