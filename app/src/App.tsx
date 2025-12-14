@@ -7,6 +7,7 @@ import { useBuildInfo } from '@hooks/useBuildInfo'
 
 function App() {
   const [isEditorOpen, setEditorOpen] = useState(false)
+  const [editorTab, setEditorTab] = useState<'list' | 'form'>('form')
   const { local, updateAvailable, reload } = useBuildInfo()
 
   return (
@@ -43,11 +44,36 @@ function App() {
                 <h2>条件の編集</h2>
                 <p>シナリオ一覧と条件を大きな画面で編集できます。</p>
               </div>
-              <button type="button" className="editor-close-btn" onClick={() => setEditorOpen(false)}>
-                閉じる
-              </button>
+              <div className="editor-panel__header-actions">
+                <nav className="editor-panel__nav" aria-label="編集画面の表示切替">
+                  <button
+                    type="button"
+                    className={['editor-nav-btn', editorTab === 'list' ? 'is-active' : ''].filter(Boolean).join(' ')}
+                    onClick={() => setEditorTab('list')}
+                  >
+                    一覧
+                  </button>
+                  <button
+                    type="button"
+                    className={['editor-nav-btn', editorTab === 'form' ? 'is-active' : ''].filter(Boolean).join(' ')}
+                    onClick={() => setEditorTab('form')}
+                  >
+                    編集
+                  </button>
+                </nav>
+                <button
+                  type="button"
+                  className="editor-close-btn"
+                  onClick={() => {
+                    setEditorOpen(false)
+                    setEditorTab('form')
+                  }}
+                >
+                  閉じる
+                </button>
+              </div>
             </header>
-            <div className="editor-panel__body">
+            <div className="editor-panel__body" data-tab={editorTab}>
               <div className="editor-panel__column editor-panel__column--list">
                 <ScenarioList />
               </div>

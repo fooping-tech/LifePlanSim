@@ -417,15 +417,6 @@ const computeVehicleCost = (
   return { total, loan, inspection, maintenance, parking, insurance }
 }
 
-const applySavingsContributions = (accounts: SavingsAccountState[]): number => {
-  let totalContribution = 0
-  accounts.forEach((account) => {
-    totalContribution += account.annualContribution
-    account.balance += account.annualContribution
-  })
-  return totalContribution
-}
-
 const applySavingsInterest = (accounts: SavingsAccountState[]): void => {
   accounts.forEach((account) => {
     const growth = account.balance * account.annualInterestRate
@@ -436,21 +427,55 @@ const applySavingsInterest = (accounts: SavingsAccountState[]): void => {
 const coverDeficitWithSavings = (
   accounts: SavingsAccountState[],
   deficit: number,
+  yearEvents: string[],
 ): number => {
   if (deficit <= 0) {
     return 0
   }
+
+  const rolePriority = (account: SavingsAccountState): number => {
+    switch (account.role) {
+      case 'emergency':
+        return 0
+      case 'short_term':
+      case 'goal_education':
+      case 'goal_house':
+      case 'goal_other':
+        return 1
+      case 'long_term':
+        return 2
+      default:
+        return account.type === 'deposit' ? 0 : 2
+    }
+  }
+
   const ordered = [...accounts].sort((a, b) => {
-    const priorityA = a.withdrawPriority ?? (a.type === 'deposit' ? 0 : 1)
-    const priorityB = b.withdrawPriority ?? (b.type === 'deposit' ? 0 : 1)
-    return priorityA - priorityB
+    const baseA = a.withdrawPriority ?? rolePriority(a)
+    const baseB = b.withdrawPriority ?? rolePriority(b)
+    const policyA = a.withdrawPolicy === 'never' ? 1_000 : a.withdrawPolicy === 'last_resort' ? 10 : 0
+    const policyB = b.withdrawPolicy === 'never' ? 1_000 : b.withdrawPolicy === 'last_resort' ? 10 : 0
+    return baseA + policyA - (baseB + policyB)
   })
   let remaining = deficit
   ordered.forEach((account) => {
     if (remaining <= 0) {
       return
     }
-    const withdrawal = Math.min(account.balance, remaining)
+    if (account.withdrawPolicy === 'never') {
+      return
+    }
+    const minBalance = account.role === 'emergency' && typeof account.minBalance === 'number' ? account.minBalance : 0
+    const available = Math.max(0, account.balance - minBalance)
+    const withdrawal = Math.min(available, remaining)
+    if (withdrawal > 0) {
+      const note =
+        account.withdrawPolicy === 'last_resort'
+          ? '（最後の手段）'
+          : account.role === 'emergency' && minBalance > 0
+            ? '（最低残高維持）'
+            : ''
+      yearEvents.push(`${account.label}: 赤字補填${note}`)
+    }
     account.balance -= withdrawal
     remaining -= withdrawal
   })
@@ -573,18 +598,55 @@ export const simulateScenario = (
     cashOnHand -= baseExpenseTotal
     totalExpenses += baseExpenseTotal
 
-    const totalContribution = applySavingsContributions(savingsAccounts)
-    cashOnHand -= totalContribution
-    totalExpenses += totalContribution
-
     if (cashOnHand < 0) {
       const deficit = Math.abs(cashOnHand)
-      const remainingDeficit = coverDeficitWithSavings(savingsAccounts, deficit)
+      const remainingDeficit = coverDeficitWithSavings(savingsAccounts, deficit, yearEvents)
       cashOnHand = remainingDeficit > 0 ? -remainingDeficit : 0
       if (remainingDeficit > 0) {
         yearEvents.push('貯蓄を超える赤字')
+      } else {
+        yearEvents.push('貯蓄から赤字補填')
       }
     }
+
+    let totalContribution = 0
+    const orderedForContribution = [...savingsAccounts].sort((a, b) => {
+      const priorityA = a.withdrawPriority ?? 1
+      const priorityB = b.withdrawPriority ?? 1
+      return priorityA - priorityB
+    })
+
+    orderedForContribution.forEach((account) => {
+      if (cashOnHand <= 0) {
+        return
+      }
+      if (account.role === 'emergency' && typeof account.minBalance === 'number') {
+        const gap = Math.max(0, account.minBalance - account.balance)
+        if (gap > 0) {
+          const topUp = Math.min(gap, cashOnHand)
+          account.balance += topUp
+          cashOnHand -= topUp
+          totalContribution += topUp
+          yearEvents.push(`${account.label}: 生活防衛資金の補充`)
+        }
+      }
+      const planned = account.annualContribution ?? 0
+      if (planned <= 0) {
+        return
+      }
+      if (account.contributionPolicy === 'surplus_only' && cashOnHand <= 0) {
+        return
+      }
+      const contribution = Math.min(planned, cashOnHand)
+      if (contribution <= 0) {
+        return
+      }
+      account.balance += contribution
+      cashOnHand -= contribution
+      totalContribution += contribution
+    })
+
+    totalExpenses += totalContribution
 
     applySavingsInterest(savingsAccounts)
     const savingsSnapshot: Record<string, number> = {}

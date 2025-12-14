@@ -143,6 +143,102 @@ describe('simulateScenario', () => {
     expect(firstYear.expenses.living).toBeGreaterThan(0)
     expect(firstYear.savingsByAccount.cash).toBeGreaterThan(0)
   })
+
+  it('covers deficits respecting emergency minBalance and last-resort rules', () => {
+    const projection = simulateScenario(
+      {
+        ...baseScenario,
+        id: 'deficit-rules',
+        name: 'Deficit Rules',
+        residents: [
+          {
+            ...sampleResident,
+            baseNetIncome: 0,
+            annualIncomeGrowthRate: 0,
+            incomeEvents: [],
+          },
+        ],
+        housing: {
+          builtYear: 2010,
+          mortgageRemaining: 0,
+          monthlyMortgage: 0,
+          managementFeeMonthly: 0,
+          maintenanceReserveMonthly: 0,
+          extraAnnualCosts: 0,
+        },
+        vehicles: [],
+        living: {
+          baseAnnual: 0,
+          insuranceAnnual: 0,
+          utilitiesAnnual: 0,
+          discretionaryAnnual: 0,
+          healthcareAnnual: 0,
+          inflationRate: 0,
+        },
+        expenseBands: [
+          {
+            id: 'stress',
+            label: '赤字要因',
+            startAge: 0,
+            endAge: 120,
+            annualAmount: 400000,
+            category: 'other',
+          },
+        ],
+        savingsAccounts: [
+          {
+            id: 'emergency',
+            label: '生活防衛資金',
+            type: 'deposit',
+            role: 'emergency',
+            balance: 1000000,
+            minBalance: 800000,
+            annualContribution: 0,
+            annualInterestRate: 0,
+            contributionPolicy: 'fixed',
+            withdrawPolicy: 'normal',
+            adjustable: true,
+            withdrawPriority: 0,
+          },
+          {
+            id: 'goal',
+            label: '目的別資金',
+            type: 'deposit',
+            role: 'goal_other',
+            balance: 500000,
+            annualContribution: 0,
+            annualInterestRate: 0,
+            contributionPolicy: 'fixed',
+            withdrawPolicy: 'normal',
+            adjustable: true,
+            withdrawPriority: 1,
+          },
+          {
+            id: 'long',
+            label: '長期投資',
+            type: 'investment',
+            role: 'long_term',
+            balance: 500000,
+            annualContribution: 0,
+            annualInterestRate: 0,
+            contributionPolicy: 'fixed',
+            withdrawPolicy: 'last_resort',
+            adjustable: false,
+            withdrawPriority: 2,
+          },
+        ],
+        initialCash: 0,
+      },
+      { horizonYears: 1 },
+    )
+    const year = projection.yearly[0]
+    expect(year).toBeTruthy()
+    expect(year.savingsByAccount.emergency).toBe(800000)
+    expect(year.savingsByAccount.goal).toBeLessThan(500000)
+    expect(year.savingsByAccount.long).toBe(500000)
+    expect(year.events.join(' ')).toContain('生活防衛資金: 赤字補填')
+    expect(year.events.join(' ')).not.toContain('長期投資: 赤字補填')
+  })
 })
 
 describe('compareScenarios', () => {

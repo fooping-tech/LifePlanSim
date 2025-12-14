@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { Controller, useFieldArray, useForm, useWatch } from 'react-hook-form'
 import type { Control, UseFormRegister, UseFormSetValue } from 'react-hook-form'
 import type { Scenario } from '@models/scenario'
@@ -75,6 +76,52 @@ const selectActiveJobPhase = (jobs: JobPhase[] | undefined, age: number): JobPha
     return undefined
   }
   return candidates.reduce((latest, job) => (job.startAge >= latest.startAge ? job : latest))
+}
+
+const SAVINGS_ROLE_LABELS: Record<NonNullable<SavingsAccount['role']>, string> = {
+  emergency: '生活防衛資金（現金/預金）',
+  short_term: '短期積立',
+  goal_education: '教育資金',
+  goal_house: '住宅資金',
+  goal_other: '目的別資金',
+  long_term: '長期投資（株）',
+}
+
+const inferSavingsRole = (account: SavingsAccount): NonNullable<SavingsAccount['role']> => {
+  if (account.role) {
+    return account.role
+  }
+  if (account.type === 'investment') {
+    return 'long_term'
+  }
+  return 'emergency'
+}
+
+const formatManYenLabel = (yen: number, digits = 0) => `${formatManYen(yen, digits)}万`
+
+const buildSavingsRulesSummary = (account: SavingsAccount): string => {
+  const role = inferSavingsRole(account)
+  const parts: string[] = []
+
+  const minBalance = Number(account.minBalance ?? 0)
+  if (role === 'emergency' && minBalance > 0) {
+    parts.push(`最低残高${formatManYenLabel(minBalance, 0)}`)
+  }
+
+  const annualContribution = Number(account.annualContribution ?? 0)
+  if (annualContribution > 0) {
+    parts.push(`積立額${formatManYenMonthlyAnnual(annualContribution)}`)
+  }
+
+  const contributionPolicy = account.contributionPolicy ?? 'fixed'
+  parts.push(`積立=${contributionPolicy === 'surplus_only' ? '余剰時のみ' : '固定'}`)
+
+  const withdrawPolicy = account.withdrawPolicy ?? (role === 'long_term' ? 'last_resort' : 'normal')
+  const withdrawLabel =
+    withdrawPolicy === 'never' ? 'しない' : withdrawPolicy === 'last_resort' ? '最後の手段' : '通常'
+  parts.push(`赤字補填=${withdrawLabel}`)
+
+  return parts.join(' / ')
 }
 
 export const ScenarioForm = () => {
@@ -1517,141 +1564,314 @@ export const ScenarioForm = () => {
       label: '貯蓄口座一覧',
       content: (
         <div className="form-section">
-          {savingsFields.map((field, index) => {
-            const entityId = (field as { id?: string }).id ?? (field as { fieldKey?: string }).fieldKey
-            const cardKey = `savings-${entityId ?? index}`
-            const collapsed = collapsedMap[cardKey] ?? false
-            const account = (watchedValues.savingsAccounts?.[index] as SavingsAccount | undefined) ?? field
-            return (
-              <div key={field.fieldKey ?? entityId ?? index} className="card collapsible-card">
-                <div className="collapsible-card__header">
-                  <button
-                    type="button"
-                    className="collapsible-subheader"
-                    onClick={() =>
-                      setCollapsedMap((prev) => ({
-                        ...prev,
-                        [cardKey]: !collapsed,
-                      }))
-                    }
-                  >
-                    <span>{field.label || `口座 ${index + 1}`}</span>
-                    <span className="collapse-icon">{collapsed ? '+' : '−'}</span>
-                  </button>
-                  <button type="button" className="link-button" onClick={() => removeSavings(index)}>
-                    削除
-                  </button>
-                </div>
-                {!collapsed ? (
-                  <div className="collapsible-card__body form-section--grid">
-                    <label>
-                      名称
-                      <input {...register(`savingsAccounts.${index}.label` as const)} />
-                    </label>
-                    <label>
-                      種類
-                      <select {...register(`savingsAccounts.${index}.type` as const)}>
-                        <option value="deposit">預金</option>
-                        <option value="investment">投資</option>
-                      </select>
-                    </label>
-                    <label>
-                      残高
-                      <Controller
-                        control={control}
-                        name={`savingsAccounts.${index}.balance` as const}
-                        render={({ field }) => (
-                          <YenInput
-                            value={field.value}
-                            ariaLabel="残高"
-                            onChange={(next) => field.onChange(next)}
-                            onBlur={() => field.onBlur()}
-                          />
-                        )}
-                      />
-                    </label>
-                    <label>
-                      年間積立額
-                      <Controller
-                        control={control}
-                        name={`savingsAccounts.${index}.annualContribution` as const}
-                        render={({ field }) => (
-                          <YenInput
-                            value={field.value}
-                            ariaLabel="年間積立額"
-                            onChange={(next) => field.onChange(next)}
-                            onBlur={() => field.onBlur()}
-                          />
-                        )}
-                      />
-                      {sliderMode ? (
-                        <SliderControl
-                          ariaLabel="年間積立額"
-                          value={Number(account.annualContribution ?? 0)}
-                          min={0}
-                          max={autoMax(Number(account.annualContribution ?? 0), 2_400_000)}
-                          step={YEN_STEP}
-                          fineStep={1000}
-                          onChange={(next) =>
-                            form.setValue(
-                              `savingsAccounts.${index}.annualContribution` as const,
-                              clampNumber(next, 0, 500_000_000),
-                              { shouldDirty: true, shouldTouch: true },
-                            )
+          {(() => {
+            const accounts = (scenarioValues.savingsAccounts ?? []) as SavingsAccount[]
+            const groups: Array<{
+              key: string
+              label: string
+              icon: ReactNode
+              roles: Array<NonNullable<SavingsAccount['role']>>
+            }> = [
+              { key: 'emergency', label: '生活防衛資金', icon: <IconHeartPulse aria-hidden />, roles: ['emergency'] },
+              {
+                key: 'goals',
+                label: '目的別資金',
+                icon: <IconCalendar aria-hidden />,
+                roles: ['goal_education', 'goal_house', 'goal_other', 'short_term'],
+              },
+              { key: 'long_term', label: '長期投資', icon: <IconWallet aria-hidden />, roles: ['long_term'] },
+            ]
+
+            const byRole = new Map<NonNullable<SavingsAccount['role']>, number[]>()
+            accounts.forEach((account, idx) => {
+              const role = inferSavingsRole(account)
+              const existing = byRole.get(role) ?? []
+              existing.push(idx)
+              byRole.set(role, existing)
+            })
+
+            return groups.flatMap((group) => {
+              const indices = group.roles.flatMap((role) => byRole.get(role) ?? [])
+              if (!indices.length) {
+                return []
+              }
+              return [
+                <div key={`group-${group.key}`} className="grid-span-all savings-group-header">
+                  <span className="savings-group-icon">{group.icon}</span>
+                  <h4 className="savings-group-title">{group.label}</h4>
+                </div>,
+                ...indices.map((index) => {
+                  const field = savingsFields[index]
+                  const entityId = (field as { id?: string }).id ?? (field as { fieldKey?: string }).fieldKey
+                  const cardKey = `savings-${entityId ?? index}`
+                  const collapsed = collapsedMap[cardKey] ?? false
+                  const account = (watchedValues.savingsAccounts?.[index] as SavingsAccount | undefined) ?? field
+                  const role = inferSavingsRole(account)
+                  return (
+                    <div key={field.fieldKey ?? entityId ?? index} className="card collapsible-card">
+                      <div className="collapsible-card__header">
+                        <button
+                          type="button"
+                          className="collapsible-subheader"
+                          onClick={() =>
+                            setCollapsedMap((prev) => ({
+                              ...prev,
+                              [cardKey]: !collapsed,
+                            }))
                           }
-                          formatValue={(yen) => formatManYenMonthlyAnnual(yen)}
-                        />
-                      ) : null}
-                    </label>
-                    <label>
-                      年利
-                      <input
-                        type="number"
-                        step="0.01"
-                        inputMode="decimal"
-                        {...register(`savingsAccounts.${index}.annualInterestRate` as const, {
-                          valueAsNumber: true,
-                        })}
-                      />
-                      {sliderMode ? (
-                        <SliderControl
-                          ariaLabel="年利"
-                          value={Number(account.annualInterestRate ?? 0)}
-                          min={0}
-                          max={0.2}
-                          step={0.01}
-                          fineStep={0.001}
-                          onChange={(next) =>
-                            form.setValue(`savingsAccounts.${index}.annualInterestRate` as const, next, {
-                              shouldDirty: true,
-                              shouldTouch: true,
-                            })
-                          }
-                          formatValue={(v) => `${Math.round(v * 1000) / 10}%`}
-                        />
-                      ) : null}
-                    </label>
-                    <label>
-                      引き出し優先度
-                      <input
-                        type="number"
-                        {...register(`savingsAccounts.${index}.withdrawPriority` as const, {
-                          valueAsNumber: true,
-                        })}
-                      />
-                    </label>
-                    <label className="checkbox">
-                      <input
-                        type="checkbox"
-                        {...register(`savingsAccounts.${index}.adjustable` as const)}
-                      />
-                      任意に増額
-                    </label>
-                  </div>
-                ) : null}
-              </div>
-            )
-          })}
+                        >
+                          <span>{field.label || `口座 ${index + 1}`}</span>
+                          <span className="collapse-icon">{collapsed ? '+' : '−'}</span>
+                        </button>
+                        <button type="button" className="link-button" onClick={() => removeSavings(index)}>
+                          削除
+                        </button>
+                      </div>
+                      {!collapsed ? (
+                        <div className="collapsible-card__body form-section--grid">
+                          <label>
+                            役割
+                            <select
+                              {...register(`savingsAccounts.${index}.role` as const)}
+                              onChange={(event) => {
+                                const nextRole = event.target.value as NonNullable<SavingsAccount['role']>
+                                form.setValue(`savingsAccounts.${index}.role` as const, nextRole, {
+                                  shouldDirty: true,
+                                  shouldTouch: true,
+                                })
+                                if (typeof account.withdrawPriority !== 'number') {
+                                  const priority = nextRole === 'emergency' ? 0 : nextRole === 'long_term' ? 2 : 1
+                                  form.setValue(`savingsAccounts.${index}.withdrawPriority` as const, priority, {
+                                    shouldDirty: true,
+                                    shouldTouch: true,
+                                  })
+                                }
+                                if (!account.withdrawPolicy) {
+                                  const policy = nextRole === 'long_term' ? 'last_resort' : 'normal'
+                                  form.setValue(`savingsAccounts.${index}.withdrawPolicy` as const, policy, {
+                                    shouldDirty: true,
+                                    shouldTouch: true,
+                                  })
+                                }
+                              }}
+                            >
+                              {Object.entries(SAVINGS_ROLE_LABELS).map(([key, label]) => (
+                                <option key={key} value={key}>
+                                  {label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <div className="grid-span-all action-row">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                form.setValue(`savingsAccounts.${index}.role` as const, 'emergency', {
+                                  shouldDirty: true,
+                                  shouldTouch: true,
+                                })
+                                form.setValue(`savingsAccounts.${index}.type` as const, 'deposit', {
+                                  shouldDirty: true,
+                                  shouldTouch: true,
+                                })
+                                form.setValue(`savingsAccounts.${index}.withdrawPolicy` as const, 'normal', {
+                                  shouldDirty: true,
+                                  shouldTouch: true,
+                                })
+                              }}
+                            >
+                              生活防衛資金にする
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                form.setValue(`savingsAccounts.${index}.role` as const, 'long_term', {
+                                  shouldDirty: true,
+                                  shouldTouch: true,
+                                })
+                                form.setValue(`savingsAccounts.${index}.type` as const, 'investment', {
+                                  shouldDirty: true,
+                                  shouldTouch: true,
+                                })
+                                form.setValue(`savingsAccounts.${index}.withdrawPolicy` as const, 'last_resort', {
+                                  shouldDirty: true,
+                                  shouldTouch: true,
+                                })
+                              }}
+                            >
+                              長期投資にする
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                form.setValue(`savingsAccounts.${index}.role` as const, 'goal_education', {
+                                  shouldDirty: true,
+                                  shouldTouch: true,
+                                })
+                                form.setValue(`savingsAccounts.${index}.type` as const, 'deposit', {
+                                  shouldDirty: true,
+                                  shouldTouch: true,
+                                })
+                              }}
+                            >
+                              教育資金にする
+                            </button>
+                          </div>
+                          <label>
+                            名称
+                            <input {...register(`savingsAccounts.${index}.label` as const)} />
+                          </label>
+                          <label>
+                            種類
+                            <select {...register(`savingsAccounts.${index}.type` as const)}>
+                              <option value="deposit">預金</option>
+                              <option value="investment">投資</option>
+                            </select>
+                          </label>
+                          <label>
+                            残高
+                            <Controller
+                              control={control}
+                              name={`savingsAccounts.${index}.balance` as const}
+                              render={({ field: balanceField }) => (
+                                <YenInput
+                                  value={balanceField.value}
+                                  ariaLabel="残高"
+                                  onChange={(next) => balanceField.onChange(next)}
+                                  onBlur={() => balanceField.onBlur()}
+                                />
+                              )}
+                            />
+                          </label>
+                          <label>
+                            年間積立額
+                            <Controller
+                              control={control}
+                              name={`savingsAccounts.${index}.annualContribution` as const}
+                              render={({ field: contributionField }) => (
+                                <YenInput
+                                  value={contributionField.value}
+                                  ariaLabel="年間積立額"
+                                  onChange={(next) => contributionField.onChange(next)}
+                                  onBlur={() => contributionField.onBlur()}
+                                />
+                              )}
+                            />
+                            {sliderMode ? (
+                              <SliderControl
+                                ariaLabel="年間積立額"
+                                value={Number(account.annualContribution ?? 0)}
+                                min={0}
+                                max={autoMax(Number(account.annualContribution ?? 0), 2_400_000)}
+                                step={YEN_STEP}
+                                fineStep={1000}
+                                onChange={(next) =>
+                                  form.setValue(
+                                    `savingsAccounts.${index}.annualContribution` as const,
+                                    clampNumber(next, 0, 500_000_000),
+                                    { shouldDirty: true, shouldTouch: true },
+                                  )
+                                }
+                                formatValue={(yen) => formatManYenMonthlyAnnual(yen)}
+                              />
+                            ) : null}
+                          </label>
+                          <label>
+                            年利
+                            <input
+                              type="number"
+                              step="0.01"
+                              inputMode="decimal"
+                              {...register(`savingsAccounts.${index}.annualInterestRate` as const, {
+                                valueAsNumber: true,
+                              })}
+                            />
+                            {sliderMode ? (
+                              <SliderControl
+                                ariaLabel="年利"
+                                value={Number(account.annualInterestRate ?? 0)}
+                                min={0}
+                                max={0.2}
+                                step={0.01}
+                                fineStep={0.001}
+                                onChange={(next) =>
+                                  form.setValue(`savingsAccounts.${index}.annualInterestRate` as const, next, {
+                                    shouldDirty: true,
+                                    shouldTouch: true,
+                                  })
+                                }
+                                formatValue={(v) => `${Math.round(v * 1000) / 10}%`}
+                              />
+                            ) : null}
+                          </label>
+                          <details className="grid-span-all">
+                            <summary>詳細</summary>
+                            <div className="inline-card">
+                              <label>
+                                積立ルール
+                                <select {...register(`savingsAccounts.${index}.contributionPolicy` as const)}>
+                                  <option value="fixed">固定（余剰の範囲で実行）</option>
+                                  <option value="surplus_only">余剰時のみ</option>
+                                </select>
+                              </label>
+                              <label>
+                                取り崩し
+                                <select {...register(`savingsAccounts.${index}.withdrawPolicy` as const)}>
+                                  <option value="normal">通常</option>
+                                  <option value="last_resort">最後の手段</option>
+                                  <option value="never">自動では取り崩さない</option>
+                                </select>
+                              </label>
+                              <label>
+                                最低残高（生活防衛）
+                                <Controller
+                                  control={control}
+                                  name={`savingsAccounts.${index}.minBalance` as const}
+                                  render={({ field: minField }) => (
+                                    <YenInput
+                                      value={minField.value}
+                                      ariaLabel="最低残高"
+                                      onChange={(next) => minField.onChange(next)}
+                                      onBlur={() => minField.onBlur()}
+                                    />
+                                  )}
+                                />
+                              </label>
+                              <label>
+                                引き出し優先度
+                                <input
+                                  type="number"
+                                  {...register(`savingsAccounts.${index}.withdrawPriority` as const, {
+                                    valueAsNumber: true,
+                                  })}
+                                />
+                              </label>
+                            </div>
+                          </details>
+                          <label className="checkbox">
+                            <input type="checkbox" {...register(`savingsAccounts.${index}.adjustable` as const)} />
+                            任意に増額
+                          </label>
+                          <div className="grid-span-all">
+                            <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b' }}>
+                              役割により、赤字時の取り崩し順や「最後の手段」扱いが変わります。
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="collapsible-card__body">
+                          <div className="savings-collapsed-meta">
+                            <span className="savings-role-tag">{SAVINGS_ROLE_LABELS[role]}</span>
+                            <span className="savings-rules-summary">{buildSavingsRulesSummary(account)}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                }),
+              ]
+            })
+          })()}
           <div className="action-row">
             <button type="button" onClick={() => setSavingsPresetOpen(true)}>
               プリセットから追加
@@ -1663,6 +1883,10 @@ export const ScenarioForm = () => {
                   id: createId('savings'),
                   label: '新しい口座',
                   type: 'deposit',
+                  role: 'emergency',
+                  contributionPolicy: 'fixed',
+                  withdrawPolicy: 'normal',
+                  minBalance: 0,
                   balance: 0,
                   annualContribution: 0,
                   annualInterestRate: 0.01,

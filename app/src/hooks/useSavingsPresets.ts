@@ -18,11 +18,15 @@ const FALLBACK_PRESETS: SavingsPreset[] = [
     account: {
       label: '普通預金',
       type: 'deposit',
+      role: 'emergency',
+      contributionPolicy: 'fixed',
+      withdrawPolicy: 'normal',
+      minBalance: 1500000,
       balance: 1500000,
       annualContribution: 300000,
       annualInterestRate: 0.001,
       adjustable: true,
-      withdrawPriority: 1,
+      withdrawPriority: 0,
     },
   },
   {
@@ -32,11 +36,14 @@ const FALLBACK_PRESETS: SavingsPreset[] = [
     account: {
       label: '積立NISA',
       type: 'investment',
+      role: 'long_term',
+      contributionPolicy: 'fixed',
+      withdrawPolicy: 'last_resort',
       balance: 500000,
       annualContribution: 800000,
       annualInterestRate: 0.05,
       adjustable: false,
-      withdrawPriority: 3,
+      withdrawPriority: 2,
     },
   },
 ]

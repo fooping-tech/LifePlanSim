@@ -12,6 +12,7 @@ import {
 } from '@utils/persistence'
 import { createId } from '@utils/id'
 import type { JobPhase } from '@models/resident'
+import type { SavingsAccount } from '@models/finance'
 
 interface ScenarioStoreState {
   scenarios: Scenario[]
@@ -145,6 +146,58 @@ const ensureScenarioDefaults = (scenario: Scenario): Scenario => {
     ]
   })()
 
+  const normalizedSavingsAccounts = (() => {
+    const accounts = scenario.savingsAccounts ?? []
+    const inferRole = (account: SavingsAccount): SavingsAccount['role'] => {
+      if (account.role) {
+        return account.role
+      }
+      const label = (account.label ?? '').toLowerCase()
+      if (label.includes('教育')) return 'goal_education'
+      if (label.includes('住宅')) return 'goal_house'
+      if (account.type === 'investment') return 'long_term'
+      return 'emergency'
+    }
+    const defaultWithdrawPriority = (role: SavingsAccount['role']): number => {
+      switch (role) {
+        case 'emergency':
+          return 0
+        case 'short_term':
+        case 'goal_education':
+        case 'goal_house':
+        case 'goal_other':
+          return 1
+        case 'long_term':
+          return 2
+        default:
+          return 1
+      }
+    }
+    const defaultWithdrawPolicy = (role: SavingsAccount['role'], type: SavingsAccount['type']): SavingsAccount['withdrawPolicy'] => {
+      if (role === 'long_term' || type === 'investment') {
+        return 'last_resort'
+      }
+      return 'normal'
+    }
+    return accounts.map((account) => {
+      const role = inferRole(account)
+      return {
+        id: account.id ?? createId('savings'),
+        label: account.label ?? (role === 'long_term' ? '投資' : '預金'),
+        type: account.type ?? 'deposit',
+        role,
+        contributionPolicy: account.contributionPolicy ?? 'fixed',
+        minBalance: account.minBalance,
+        withdrawPolicy: account.withdrawPolicy ?? defaultWithdrawPolicy(role, account.type ?? 'deposit'),
+        balance: account.balance ?? 0,
+        annualContribution: account.annualContribution ?? 0,
+        annualInterestRate: account.annualInterestRate ?? (account.type === 'investment' ? 0.05 : 0.01),
+        adjustable: account.adjustable ?? true,
+        withdrawPriority: account.withdrawPriority ?? defaultWithdrawPriority(role),
+      }
+    })
+  })()
+
   return {
     currency: 'JPY',
     expenseBands: [],
@@ -185,7 +238,7 @@ const ensureScenarioDefaults = (scenario: Scenario): Scenario => {
           jobs: normalizedJobs,
         }
       }) ?? [],
-    savingsAccounts: scenario.savingsAccounts ?? [],
+    savingsAccounts: normalizedSavingsAccounts,
     livingPlans: normalizedLivingPlans,
     living: {
       baseAnnual: scenario.living?.baseAnnual ?? 0,

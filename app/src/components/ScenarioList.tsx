@@ -3,11 +3,14 @@ import { useScenarioStore } from '@store/scenarioStore'
 import { useShallow } from 'zustand/react/shallow'
 import { downloadScenarioSet, readScenarioFile } from '@utils/persistence'
 import { IconDownload, IconFileJson, IconLink, IconUpload } from '@components/icons'
+import { AiScenarioDialog } from '@components/AiScenarioDialog'
+import type { Scenario } from '@models/scenario'
 
 export const ScenarioList = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [status, setStatus] = useState('')
   const [importMode, setImportMode] = useState<'replace' | 'append'>('replace')
+  const [aiOpen, setAiOpen] = useState(false)
   const {
     scenarios,
     activeScenarioId,
@@ -15,6 +18,7 @@ export const ScenarioList = () => {
     addScenario,
     duplicateScenario,
     removeScenario,
+    updateScenario,
     loadScenarios,
     appendScenarios,
     resetToSamples,
@@ -27,6 +31,7 @@ export const ScenarioList = () => {
       addScenario: state.addScenario,
       duplicateScenario: state.duplicateScenario,
       removeScenario: state.removeScenario,
+      updateScenario: state.updateScenario,
       loadScenarios: state.loadScenarios,
       appendScenarios: state.appendScenarios,
       resetToSamples: state.resetToSamples,
@@ -93,6 +98,45 @@ export const ScenarioList = () => {
     } catch (error) {
       setStatus(`コピーに失敗しました: ${(error as Error).message}`)
     }
+  }
+
+  const activeScenarioName = scenarios.find((scenario) => scenario.id === activeScenarioId)?.name
+
+  const handleAiApply = (payload: Scenario[], mode: 'append' | 'replace' | 'overwrite') => {
+    if (!payload.length) {
+      return
+    }
+    if (mode === 'replace') {
+      const ok = window.confirm('現在のシナリオ一覧を置き換えます。よろしいですか？')
+      if (!ok) {
+        return
+      }
+      loadScenarios(payload)
+      setStatus('AI: 置換しました')
+      setAiOpen(false)
+      return
+    }
+    if (mode === 'overwrite') {
+      const activeId = activeScenarioId
+      const active = scenarios.find((scenario) => scenario.id === activeId)
+      if (!activeId || !active) {
+        setStatus('AI: 上書き対象のシナリオが見つかりません')
+        return
+      }
+      const ok = window.confirm(`選択中のシナリオ「${active.name}」を上書きします。よろしいですか？`)
+      if (!ok) {
+        return
+      }
+      updateScenario({ ...payload[0], id: activeId })
+      selectScenario(activeId)
+      setStatus('AI: 上書きしました')
+      setAiOpen(false)
+      return
+    }
+
+    appendScenarios(payload)
+    setStatus('AI: 追加しました')
+    setAiOpen(false)
   }
 
   return (
@@ -207,6 +251,18 @@ export const ScenarioList = () => {
                 </span>
               </button>
             </div>
+            <div className="scenario-file-actions__group">
+              <p className="scenario-file-actions__title">
+                <IconFileJson title="AI" /> AI
+              </p>
+              <button type="button" className="scenario-file-actions__btn" onClick={() => setAiOpen(true)}>
+                <span className="scenario-file-actions__btn-label">
+                  <IconFileJson title="JSON" />
+                  AIで作成（コピー&貼り付け）
+                </span>
+                <span className="scenario-file-actions__btn-help">ChatGPT/GeminiのUIで生成したJSONを取り込みます</span>
+              </button>
+            </div>
           </div>
           <input
             ref={fileInputRef}
@@ -218,6 +274,14 @@ export const ScenarioList = () => {
           {status ? <p className="scenario-list__status">{status}</p> : null}
         </div>
       </>
+      {aiOpen ? (
+        <AiScenarioDialog
+          isOpen
+          onClose={() => setAiOpen(false)}
+          activeScenarioName={activeScenarioName}
+          onApply={handleAiApply}
+        />
+      ) : null}
     </section>
   )
 }

@@ -74,10 +74,26 @@ export interface LivingPlan {
 
 export type SavingsAccountType = 'deposit' | 'investment'
 
+export type SavingsAccountRole =
+  | 'emergency'
+  | 'short_term'
+  | 'goal_education'
+  | 'goal_house'
+  | 'goal_other'
+  | 'long_term'
+
+export type ContributionPolicy = 'fixed' | 'surplus_only'
+
+export type WithdrawPolicy = 'never' | 'last_resort' | 'normal'
+
 export interface SavingsAccount {
   id: string
   label: string
   type: SavingsAccountType
+  role?: SavingsAccountRole
+  contributionPolicy?: ContributionPolicy
+  minBalance?: number
+  withdrawPolicy?: WithdrawPolicy
   balance: number
   annualContribution: number
   annualInterestRate: number

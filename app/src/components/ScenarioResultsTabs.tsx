@@ -478,6 +478,9 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
               />
             </VictoryChart>
           </div>
+          <p className="chart-note">
+            赤字時の自動取り崩しは「生活防衛資金（最低残高まで）→ 目的別資金 → 長期投資（最後の手段）」の順です（口座の「取り崩し」設定で変更できます）。
+          </p>
         </div>
       )}
 

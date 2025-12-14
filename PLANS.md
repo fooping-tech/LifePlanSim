@@ -19,6 +19,9 @@ Deliver a browser-based interactive simulator that lets households model long-te
 - [x] (2025-12-13) Added optional slider controls for key numeric inputs in the editor.
 - [x] (2025-12-13) Improved net worth chart: axis padding, hover crosshair + ages tooltip, and reveal animation.
 - [x] (2025-12-13) Added resident career phases (job change + pension) via `jobs[]` and updated income projection.
+- [x] (2025-12-13) Clarified savings account roles (生活防衛/目的別/長期投資) with grouped UI, contribution/withdraw rules, and deficit-handling logic + event logging.
+- [x] (2025-12-14) Improved mobile support: editor overlay now switches between “一覧/編集” tabs on small screens, and form inputs avoid iOS zoom with 16px font size.
+- [x] (2025-12-14) Added “AIで作成（コピー&貼り付け）” flow to import Scenario JSON generated in ChatGPT/Gemini UI (no BYOK/server required).
 
 ## Surprises & Discoveries
 
@@ -237,6 +240,121 @@ Milestone 4 (Validation & UX refinements) adds guardrails: highlight years where
     - Acceptance:
       - A resident can represent: “会社員(35–45) → 転職(46–60) → 年金(65〜)” with different net income/growth.
       - Charts/tables update correctly and no legacy scenarios break.
+29. Clarify “口座間の役割” (account roles + contribution/withdraw rules + grouped UI):
+    - Goal: Help users understand what each account is for (生活防衛資金/目的別/長期投資など) and what happens during deficits and contributions.
+    - Data model changes (backward-compatible):
+      - Add `SavingsAccount.role?: AccountRole` where `AccountRole` is an enum/string union:
+        - `emergency` (生活防衛資金/現金・預金)
+        - `short_term` (短期目的/積立)
+        - `goal_education`, `goal_house`, `goal_other` (目的別資金)
+        - `long_term` (長期投資/株)
+      - Add optional rule fields (can be derived from role defaults if omitted):
+        - `contributionPolicy?: 'fixed' | 'surplus_only'`
+        - `minBalance?: number` (emergency floor)
+        - `withdrawPolicy?: 'never' | 'last_resort' | 'normal'`
+      - Migration: if missing, infer role from existing `type`:
+        - `deposit` → `emergency` (or `short_term` depending on label)
+        - `investment` → `long_term`
+        - Auto-set `withdrawPriority` defaults from role (emergency first, long_term last).
+    - UI (貯蓄口座一覧) changes:
+      - Group accounts by role with section headers + icon/color:
+        - Emergency / Goals / Long-term
+      - Each account card shows a compact “役割タグ” + one-line rules summary in collapsed view:
+        - e.g., “生活防衛資金 / 最低残高 200万 / 赤字補填=優先”
+      - Add a role selector and quick role presets:
+        - “生活防衛資金にする”, “長期投資にする”, “教育資金にする”
+      - Keep advanced controls under “詳細” (minBalance, policies) to avoid clutter.
+    - Simulation behavior (make roles meaningful):
+      - Contribution ordering:
+        - Option A: Expenses first → then contributions (surplus-only means contribute only if `cashOnHand > 0`).
+        - Option B: Maintain emergency buffer first (top up emergency to minBalance) → then allocate to other contributions.
+      - Deficit handling:
+        - Withdraw from `emergency` down to `minBalance`, then `short_term/goal`, and only then `long_term` (last resort).
+        - Respect `withdrawPolicy: never` to prevent auto-selling long-term investments unless explicitly allowed.
+      - Keep current `withdrawPriority` for power users, but role defaults should cover typical cases.
+    - Reporting / explainability:
+      - In yearly events, log “生活防衛資金から取り崩し”, “投資口座を取り崩し(最後の手段)” etc.
+      - Add small legend text near results explaining the withdrawal order.
+    - Acceptance:
+      - Users can immediately see which account is “生活防衛資金” vs “株(長期投資)”.
+      - In a deficit scenario, withdrawal order matches the role rules and the UI makes this predictable.
+30. Fix mobile layout (スマホ画面でも正しく表示):
+    - Goal: Small screens (iPhone/Android) でも、結果/編集/ダイアログが崩れず操作できる状態にする。
+    - Audit (現状把握):
+      - 主要画面（シナリオ一覧、条件編集、結果タブ、JSON入出力、共有リンク、プリセット）を 360×800 前後で目視確認。
+      - クリック不能・横スクロール・固定ヘッダ重なり・ツールチップはみ出し等をリスト化し、優先順位を付ける。
+    - CSS/レイアウト対応:
+      - レイアウトの基本方針: 2カラム→1カラム（左=編集、右=結果）へ自動切替。
+      - `overflow-x` の原因（長いラベル/数値/チップ/ボタン行）を潰す:
+        - 省略表示（ellipsis）、折返し、ボタンを縦積み、アイコン化（既存アイコン流用）を検討。
+      - `position: sticky` / `max-height` / `100vh` の扱いを見直し:
+        - iOS Safari のアドレスバー変動を考慮し、必要に応じて `100dvh` を採用。
+        - Safe area (`env(safe-area-inset-*)`) をパネル余白に反映。
+    - Charts/Tooltip:
+      - グラフは横スクロールを最小化しつつ、最低限の可読性（軸/凡例/ホバー情報）を維持。
+      - Tooltip はスマホで「タップで固定/もう一度タップで解除」等の挙動も検討（hover 依存を減らす）。
+    - Acceptance:
+      - 360px 幅で横スクロールなし（チャートの意図的 `overflow-x: auto` を除く）。
+      - 主要操作（追加/削除/折りたたみ/保存/インポート/共有リンク/結果閲覧）が指で実行できる。
+31. Make the condition editor mobile-friendly (条件編集画面をスマホでも入力可能に):
+    - Goal: スマホで「入力しやすい」「迷わない」「指で操作できる」編集体験にする。
+    - Form UI改善（入力体験）:
+      - 1行の入力密度を調整:
+        - ラベルと入力を縦積みに切替（小画面時のみ）。
+        - 数値入力は `inputMode` を適切に設定（円/年齢/%）。
+      - スライダ入力（既存）をスマホ前提で調整:
+        - スライダを常に十分な幅に確保し、値表示は別行/固定幅でレイアウト崩れを防止。
+      - 行内ボタンの最適化:
+        - 「プリセットから追加」「追加」「削除」などを、スマホではアイコン+短文、またはメニュー化。
+    - ナビゲーション:
+      - セクションジャンプ（アンカー）をスマホではドロップダウン化/固定フッタにする等で迷子を減らす。
+      - 折りたたみカードのサマリを強化（重要値の表示）して、開かなくても全体把握できるようにする。
+    - Validation/Feedback:
+      - エラー表示が画面外に行かないよう、カード内の近接位置に表示。
+      - 連続入力の邪魔にならないトースト/控えめなガイドを使用。
+    - Acceptance:
+      - スマホで「住人/住宅/車/生活費/貯蓄/イベント」を最後まで入力してシミュレーションできる。
+      - 主要操作のタップ領域が十分（最小 44px 目安）で、誤タップが減る。
+32. Integrate with ChatGPT/Gemini UI via copy/paste (APIキー不要のUI連携):
+    - Goal: BYOK/サーバ運用なしで、ChatGPT/Gemini等の既存UIを使って条件（Scenario JSON）を生成できるようにする。
+    - UX（基本フロー）:
+      - 条件編集画面に「AIで作成（コピー&貼り付け）」ボタンを追加。
+      - モーダル内で以下を提供:
+        - ① ユーザー入力（自然文の要望）欄
+        - ② “AIに渡す指示文” の自動生成プレビュー（テンプレ）
+        - ③ 「コピー」ボタン（クリップボードへコピー）
+        - ④ “AIの回答(JSON)” 貼り付け欄
+        - ⑤ 「検証」→「新規シナリオとして追加」/「現在に追記」/「上書き適用」
+      - 失敗時: JSONパース/スキーマ不一致の理由を表示し、再貼り付けや手修正へ誘導。
+    - プロンプト（指示文）テンプレ設計:
+      - 目的: “余計な文章を出さず、JSONだけ返す” を強制する。
+      - 含めるもの:
+        - 「返答はJSONのみ」「コードフェンス禁止」「日本円は円（number）」等の制約
+        - Scenarioの最小スキーマ（必須/任意、型、単位、例）
+        - 既存ドメインルールの要点:
+          - 生活費は年額/期間、教育費は住人教育費に入れない等
+          - 貯蓄口座 role（生活防衛/目的別/長期投資）と推奨初期値
+      - 生成対象の選択:
+        - Option A: Scenario 1件（完全なScenarioを生成）
+        - Option B: “差分パッチ”（既存Scenarioに追記/上書きしやすいPartial生成）
+    - JSON検証/正規化:
+      - 既存の import/migration と同様に、取り込み前に必ず正規化:
+        - 既定値補完（id付与、未指定フィールドのデフォルト）
+        - 数値範囲のクランプ（年齢/利率/金額など）
+        - 互換: `{scenarios: []}` 包装の受理、古い形式の補正（既存パスを再利用）
+      - スキーマ不一致のとき:
+        - どのキーが不足/型違いかをリスト表示
+        - 自動修正候補（例: “万円入力っぽいので円に換算しますか？”）は段階的に導入
+    - 実装ポイント:
+      - クリップボード: `navigator.clipboard.writeText` を優先し、失敗時は手動コピー用の選択UIを用意。
+      - サンプル/テンプレ管理: `docs/` か `app/src/utils/` にプロンプト雛形を置き、将来更新しやすくする。
+      - UI導線: 既存のJSON入出力UI（エクスポート/インポート）と近い場所に配置し、迷わないようにする。
+    - プライバシー/注意書き:
+      - ChatGPT/Geminiに貼り付けた内容は各サービス側に送信される旨を明示。
+      - 「個人情報を含めない」ガイドと、送信前プレビュー（実際にコピーされる文字列）を表示。
+    - Acceptance:
+      - APIキーなしで、ChatGPT/Gemini UIを使ってScenario JSONを生成→貼り付け→追加/適用できる。
+      - 不正な出力でも白画面にならず、エラー理由が分かる。
 
 ## Validation and Acceptance
 
