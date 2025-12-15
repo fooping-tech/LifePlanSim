@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { Scenario } from '@models/scenario'
 import { sanitizeJsonText } from '@utils/sanitizeJsonText'
+import { useAiPromptTemplates } from '@hooks/useAiPromptTemplates'
 
 type ApplyMode = 'append' | 'replace' | 'overwrite'
 
@@ -223,8 +224,29 @@ export const AiScenarioDialog = ({ isOpen, onClose, activeScenarioName, onApply 
   const [response, setResponse] = useState('')
   const [status, setStatus] = useState<string | null>(null)
   const [parsed, setParsed] = useState<Scenario[] | null>(null)
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('')
+  const { templates, loading: templateLoading, error: templateError } = useAiPromptTemplates()
 
   const prompt = useMemo(() => buildPromptTemplate(request), [request])
+  const selectedTemplate = useMemo(
+    () => templates.find((template) => template.id === selectedTemplateId) ?? null,
+    [templates, selectedTemplateId],
+  )
+
+  const applyTemplate = (templateId: string) => {
+    const template = templates.find((item) => item.id === templateId)
+    if (!template) {
+      return
+    }
+    if (request.trim().length) {
+      const ok = window.confirm('現在の入力をテンプレートで置き換えます。よろしいですか？')
+      if (!ok) {
+        return
+      }
+    }
+    setRequest(template.requestTemplateText)
+    setStatus(`テンプレート適用: ${template.title}`)
+  }
 
   const handleCopy = async () => {
     try {
@@ -277,6 +299,33 @@ export const AiScenarioDialog = ({ isOpen, onClose, activeScenarioName, onApply 
         <div className="ai-dialog__grid">
           <section className="ai-dialog__pane">
             <h4>1) 要望</h4>
+            <div className="ai-dialog__template-row">
+              <label className="ai-dialog__template-label">
+                テンプレート
+                <select
+                  value={selectedTemplateId}
+                  onChange={(e) => {
+                    const next = e.target.value
+                    setSelectedTemplateId(next)
+                  }}
+                >
+                  <option value="">（選択…）</option>
+                  {templates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="ai-dialog__template-actions">
+                <button type="button" disabled={!selectedTemplateId} onClick={() => applyTemplate(selectedTemplateId)}>
+                  挿入
+                </button>
+              </div>
+            </div>
+            {selectedTemplate ? <p className="ai-dialog__template-desc">{selectedTemplate.description}</p> : null}
+            {templateError ? <p className="ai-dialog__template-desc">テンプレート: {templateError}</p> : null}
+            {templateLoading ? <p className="ai-dialog__template-desc">テンプレート読込中...</p> : null}
             <textarea
               rows={6}
               value={request}

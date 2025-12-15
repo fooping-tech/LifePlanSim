@@ -70,6 +70,22 @@ const findNearestPoint = <T extends { x: number; y: number }>(series: T[], year:
   return best
 }
 
+const findNearestYearlyEntry = (yearly: YearlyBreakdown[], year: number): YearlyBreakdown | null => {
+  if (!yearly.length) {
+    return null
+  }
+  let best = yearly[0]
+  let bestDiff = Math.abs(yearly[0].year - year)
+  for (let i = 1; i < yearly.length; i += 1) {
+    const diff = Math.abs(yearly[i].year - year)
+    if (diff < bestDiff) {
+      best = yearly[i]
+      bestDiff = diff
+    }
+  }
+  return best
+}
+
 const useMeasuredWidth = () => {
   const [node, setNode] = useState<HTMLDivElement | null>(null)
   const [width, setWidth] = useState(640)
@@ -212,6 +228,61 @@ const buildWaterfallData = (yearly: YearlyBreakdown[]): WaterfallEntry[] => {
     y0: Math.min(0, cumulative),
     color: cumulative >= 0 ? '#0f172a' : '#ef4444',
   })
+  return data
+}
+
+const buildCashFlowWaterfall = (entry: YearlyBreakdown): WaterfallEntry[] => {
+  const income = Number.isFinite(entry.income) ? entry.income : 0
+  const expensesByCategory = expenseCategories.reduce<Record<ExpenseKey, number>>((acc, cat) => {
+    acc[cat.key] = Number.isFinite(entry.expenses[cat.key]) ? entry.expenses[cat.key] : 0
+    return acc
+  }, {} as Record<ExpenseKey, number>)
+
+  const data: WaterfallEntry[] = []
+  let cumulative = 0
+  let index = 0
+
+  data.push({
+    index,
+    key: 'income',
+    label: '収入',
+    value: income,
+    y: income,
+    y0: 0,
+    color: INCOME_CATEGORY.color,
+  })
+  cumulative = income
+  index += 1
+
+  expenseCategories.forEach((cat) => {
+    const amount = expensesByCategory[cat.key] ?? 0
+    if (!amount) {
+      return
+    }
+    const next = cumulative - amount
+    data.push({
+      index,
+      key: cat.key,
+      label: cat.label,
+      value: -amount,
+      y: Math.max(cumulative, next),
+      y0: Math.min(cumulative, next),
+      color: cat.color,
+    })
+    cumulative = next
+    index += 1
+  })
+
+  data.push({
+    index,
+    key: 'net',
+    label: '差引',
+    value: cumulative,
+    y: Math.max(0, cumulative),
+    y0: Math.min(0, cumulative),
+    color: cumulative >= 0 ? '#0f172a' : '#ef4444',
+  })
+
   return data
 }
 
@@ -367,7 +438,17 @@ interface ScenarioChartsProps {
 }
 
 const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
-  const [view, setView] = useState<'netWorth' | 'cashFlow' | 'waterfall'>('netWorth')
+  const [view, setView] = useState<'netWorth' | 'cashFlow'>('netWorth')
+  const [selectedYear, setSelectedYear] = useState<number>(() => scenario.yearly[0]?.year ?? new Date().getFullYear())
+  const yearOptions = useMemo(() => scenario.yearly.map((entry) => entry.year), [scenario.yearly])
+  const selectedYearEntry = useMemo(
+    () => findNearestYearlyEntry(scenario.yearly, selectedYear),
+    [scenario.yearly, selectedYear],
+  )
+  const selectedWaterfall = useMemo(
+    () => (selectedYearEntry ? buildCashFlowWaterfall(selectedYearEntry) : []),
+    [selectedYearEntry],
+  )
   const { setContainer: setNetWorthContainer, width: netWorthWidth } = useMeasuredWidth()
   const { setContainer: setCashFlowContainer, width: cashFlowWidth } = useMeasuredWidth()
   const netWorthDomain = useMemo(() => computeDomain(scenario.netWorth.map((point) => point.y)), [scenario.netWorth])
@@ -393,15 +474,6 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
           onClick={() => setView('cashFlow')}
         >
           キャッシュフロー
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={view === 'waterfall'}
-          className={['sub-tab-nav__btn', view === 'waterfall' ? 'is-active' : ''].join(' ')}
-          onClick={() => setView('waterfall')}
-        >
-          ウォーターフロー
         </button>
       </div>
 
@@ -488,76 +560,113 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
         <div className="chart-block">
           <div className="chart-block__header">
             <h3>{scenario.label} - キャッシュフロー</h3>
-            <span>総収入 {formatCurrency(scenario.summary.totalIncome)}</span>
+            <label className="chart-inline-control">
+              年{' '}
+              <select
+                value={selectedYearEntry?.year ?? selectedYear}
+                onChange={(event) => setSelectedYear(Number(event.target.value))}
+              >
+                {yearOptions.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
           <>
-            <div ref={setCashFlowContainer}>
-              <VictoryChart
-                theme={VictoryTheme.material}
-                height={340}
-                width={cashFlowWidth}
-                padding={defaultChartPadding}
-                containerComponent={
-                  <VictoryVoronoiContainer
-                    labels={({ datum }) => `${datum.categoryLabel} ${formatCurrency(datum.y)}\n年: ${datum.x}`}
-                    labelComponent={
-                      <VictoryTooltip
-                        constrainToVisibleArea
-                        cornerRadius={4}
-                        flyoutPadding={{ top: 8, bottom: 8, left: 10, right: 10 }}
-                        style={{ fontSize: 10 }}
+            <div className="cashflow-layout">
+              <div className="cashflow-layout__chart">
+                <div ref={setCashFlowContainer}>
+                  <VictoryChart
+                    theme={VictoryTheme.material}
+                    height={340}
+                    width={cashFlowWidth}
+                    padding={defaultChartPadding}
+                    containerComponent={
+                      <VictoryVoronoiContainer
+                        voronoiDimension="x"
+                        labels={() => ''}
+                        onActivated={(points) => {
+                          const first = points?.[0] as { x?: unknown } | undefined
+                          const year = typeof first?.x === 'number' ? first.x : Number(first?.x)
+                          if (!Number.isFinite(year)) return
+                          setSelectedYear(Math.round(year))
+                        }}
                       />
                     }
-                  />
-                }
-              >
-                <VictoryAxis tickFormat={(tick) => `${tick}`} />
-                <VictoryAxis
-                  dependentAxis
-                  tickFormat={formatAxisManYen}
-                  label="万円"
-                  style={dependentAxisStyle}
-                />
-                <VictoryBar
-                  data={scenario.cashIncomeSeries}
-                  style={{ data: { fill: INCOME_CATEGORY.color, opacity: 0.9 } }}
-                />
-                <VictoryStack>
-                  {expenseCategories.map((cat) => (
-                    <VictoryBar
-                      key={cat.key}
-                      data={scenario.cashFlowSeries
-                        .filter((entry: CashFlowSeriesEntry) => entry.category === cat.key)
-                        .map((entry) => ({ ...entry, y: -entry.y }))}
-                      style={{ data: { fill: cat.color } }}
+                  >
+                    <VictoryAxis tickFormat={(tick) => `${tick}`} />
+                    <VictoryAxis
+                      dependentAxis
+                      tickFormat={formatAxisManYen}
+                      label="万円"
+                      style={dependentAxisStyle}
                     />
-                  ))}
-                </VictoryStack>
-              </VictoryChart>
-            </div>
-            <div className="chart-legend">
-              <div className="chart-legend__item">
-                <span className="chart-legend__swatch" style={{ backgroundColor: INCOME_CATEGORY.color }} />
-                {INCOME_CATEGORY.label}
-              </div>
-              {expenseCategories.map((cat) => (
-                <div key={cat.key} className="chart-legend__item">
-                  <span className="chart-legend__swatch" style={{ backgroundColor: cat.color }} />
-                  {cat.label}
+                    <VictoryBar
+                      data={scenario.cashIncomeSeries}
+                      style={{ data: { fill: INCOME_CATEGORY.color, opacity: 0.9 } }}
+                      events={[
+                        {
+                          target: 'data',
+                          eventHandlers: {
+                            onClick: (_event, props) => {
+                              setSelectedYear(Math.round(props.datum.x))
+                              return null
+                            },
+                          },
+                        },
+                      ]}
+                    />
+                    <VictoryStack>
+                      {expenseCategories.map((cat) => (
+                        <VictoryBar
+                          key={cat.key}
+                          data={scenario.cashFlowSeries
+                            .filter((entry: CashFlowSeriesEntry) => entry.category === cat.key)
+                            .map((entry) => ({ ...entry, y: -entry.y }))}
+                          style={{ data: { fill: cat.color } }}
+                          events={[
+                            {
+                              target: 'data',
+                              eventHandlers: {
+                                onClick: (_event, props) => {
+                                  setSelectedYear(Math.round(props.datum.x))
+                                  return null
+                                },
+                              },
+                            },
+                          ]}
+                        />
+                      ))}
+                    </VictoryStack>
+                  </VictoryChart>
                 </div>
-              ))}
+                <div className="chart-legend">
+                  <div className="chart-legend__item">
+                    <span className="chart-legend__swatch" style={{ backgroundColor: INCOME_CATEGORY.color }} />
+                    {INCOME_CATEGORY.label}
+                  </div>
+                  {expenseCategories.map((cat) => (
+                    <div key={cat.key} className="chart-legend__item">
+                      <span className="chart-legend__swatch" style={{ backgroundColor: cat.color }} />
+                      {cat.label}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {selectedYearEntry ? (
+                <div className="cashflow-layout__waterfall">
+                  <div className="chart-block__header">
+                    <h4>{selectedYearEntry.year} 年の内訳（ウォーターフォール）</h4>
+                    <span>差引 {formatCurrency(selectedYearEntry.netCashFlow)}</span>
+                  </div>
+                  <WaterfallChart data={selectedWaterfall} width={560} height={300} />
+                  <p className="chart-note">棒をクリックすると、その年の内訳が表示されます。</p>
+                </div>
+              ) : null}
             </div>
           </>
-        </div>
-      )}
-
-      {view === 'waterfall' && (
-        <div className="chart-block">
-          <div className="chart-block__header">
-            <h3>{scenario.label} - ウォーターフロー</h3>
-            <span>最終差額 {formatCurrency(scenario.summary.finalNetWorth)}</span>
-          </div>
-          <WaterfallChart data={scenario.waterfallData} />
         </div>
       )}
 
@@ -581,12 +690,10 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
   )
 }
 
-const WaterfallChart = ({ data }: { data: WaterfallEntry[] }) => {
+const WaterfallChart = ({ data, width = 640, height = 340 }: { data: WaterfallEntry[]; width?: number; height?: number }) => {
   if (!data.length) {
     return <p>ウォーターフローのデータが不足しています。</p>
   }
-  const width = 640
-  const height = 340
   const paddingX = 60
   const paddingY = 30
   const chartWidth = width - paddingX * 2
@@ -650,6 +757,7 @@ const CombinedCharts = ({
     cashIncomeSeries: IncomeSeriesEntry[]
     cashExpenseSeries: CashExpenseSeriesEntry[]
     cashFlowSeries: CashFlowSeriesEntry[]
+    yearly: YearlyBreakdown[]
     color: string
   }>
 }) => {
@@ -657,6 +765,13 @@ const CombinedCharts = ({
   const { setContainer: setNetWorthContainer, width: netWorthWidth } = useMeasuredWidth()
   const { setContainer: setCashFlowContainer, width: cashFlowWidth } = useMeasuredWidth()
   const [hover, setHover] = useState<{ year: number; points: Array<{ label: string; value: number }> } | null>(null)
+  const allYears = useMemo(() => {
+    const years = new Set<number>()
+    scenarios.forEach((scenario) => scenario.yearly.forEach((entry) => years.add(entry.year)))
+    return Array.from(years).sort((a, b) => a - b)
+  }, [scenarios])
+  const [selectedYear, setSelectedYear] = useState<number>(() => allYears[0] ?? new Date().getFullYear())
+  const [waterfallOpen, setWaterfallOpen] = useState(false)
   const netWorthDomain = useMemo(
     () => computeDomain(scenarios.flatMap((scenario) => scenario.netWorth.map((point) => point.y))),
     [scenarios],
@@ -760,6 +875,19 @@ const CombinedCharts = ({
         <div className="chart-block">
           <div className="chart-block__header">
             <h3>全シナリオキャッシュフロー比較</h3>
+            <label className="chart-inline-control">
+              年{' '}
+              <select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))}>
+                {allYears.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="button" className="chart-inline-btn" onClick={() => setWaterfallOpen(true)}>
+              内訳を見る
+            </button>
           </div>
           <div ref={setCashFlowContainer}>
             <VictoryChart
@@ -769,17 +897,14 @@ const CombinedCharts = ({
               padding={defaultChartPadding}
               containerComponent={
                 <VictoryVoronoiContainer
-                  labels={({ datum }) =>
-                    `${datum.scenarioLabel ?? ''} ${datum.categoryLabel} ${formatCurrency(datum.y)}\n年: ${datum.x}`
-                  }
-                  labelComponent={
-                    <VictoryTooltip
-                      constrainToVisibleArea
-                      cornerRadius={4}
-                      flyoutPadding={8}
-                      style={{ fontSize: 10 }}
-                    />
-                  }
+                  voronoiDimension="x"
+                  labels={() => ''}
+                  onActivated={(points) => {
+                    const first = points?.[0] as { x?: unknown } | undefined
+                    const year = typeof first?.x === 'number' ? first.x : Number(first?.x)
+                    if (!Number.isFinite(year)) return
+                    setSelectedYear(Math.round(year))
+                  }}
                 />
               }
             >
@@ -801,6 +926,17 @@ const CombinedCharts = ({
                         scenarioLabel: scenario.label,
                       }))}
                       style={{ data: { fill: INCOME_CATEGORY.color, opacity: 0.85 } }}
+                      events={[
+                        {
+                          target: 'data',
+                          eventHandlers: {
+                            onClick: (_event, props) => {
+                              setSelectedYear(Math.round(props.datum.x))
+                              return null
+                            },
+                          },
+                        },
+                      ]}
                     />
                     <VictoryStack>
                       {expenseCategories.map((cat) => (
@@ -814,6 +950,17 @@ const CombinedCharts = ({
                               scenarioLabel: scenario.label,
                             }))}
                           style={{ data: { fill: cat.color, opacity: 0.8 } }}
+                          events={[
+                            {
+                              target: 'data',
+                              eventHandlers: {
+                                onClick: (_event, props) => {
+                                  setSelectedYear(Math.round(props.datum.x))
+                                  return null
+                                },
+                              },
+                            },
+                          ]}
                         />
                       ))}
                     </VictoryStack>
@@ -836,6 +983,38 @@ const CombinedCharts = ({
           </div>
         </div>
       )}
+      {waterfallOpen ? (
+        <div className="preset-modal" role="dialog" aria-modal="true" aria-label="キャッシュフロー内訳">
+          <div className="preset-modal__panel">
+            <header className="preset-modal__header">
+              <div>
+                <h3>{selectedYear} 年の内訳（ウォーターフォール）</h3>
+                <p>棒をクリックして年を選択できます（比較表示は最大3シナリオ）。</p>
+              </div>
+              <button type="button" className="preset-modal__close-btn" onClick={() => setWaterfallOpen(false)}>
+                閉じる
+              </button>
+            </header>
+            <div className="waterfall-grid">
+              {scenarios.slice(0, 3).map((scenario) => {
+                const yearEntry = findNearestYearlyEntry(scenario.yearly, selectedYear)
+                if (!yearEntry) return null
+                const waterfall = buildCashFlowWaterfall(yearEntry)
+                return (
+                  <div key={scenario.id} className="waterfall-panel">
+                    <div className="waterfall-panel__header">
+                      <strong>{scenario.label}</strong>
+                      <span>差引 {formatCurrency(yearEntry.netCashFlow)}</span>
+                    </div>
+                    <WaterfallChart data={waterfall} width={520} height={280} />
+                  </div>
+                )
+              })}
+            </div>
+            {scenarios.length > 3 ? <p className="chart-note">比較表示は最大3シナリオまで表示します。</p> : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

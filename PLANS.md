@@ -22,6 +22,9 @@ Deliver a browser-based interactive simulator that lets households model long-te
 - [x] (2025-12-13) Clarified savings account roles (生活防衛/目的別/長期投資) with grouped UI, contribution/withdraw rules, and deficit-handling logic + event logging.
 - [x] (2025-12-14) Improved mobile support: editor overlay now switches between “一覧/編集” tabs on small screens, and form inputs avoid iOS zoom with 16px font size.
 - [x] (2025-12-14) Added “AIで作成（コピー&貼り付け）” flow to import Scenario JSON generated in ChatGPT/Gemini UI (no BYOK/server required).
+- [x] (2025-12-14) Added AI request template presets (questionnaire-style) selectable in the AI dialog to improve prompt quality and consistency.
+- [x] (2025-12-15) Switched Wizard quick input from “おまかせ” autofill to preset-based input (residents/housing/vehicle/living/savings).
+- [x] (2025-12-15) Added cashflow year picker + per-year waterfall breakdown panel (single scenario + overview compare).
 
 ## Surprises & Discoveries
 
@@ -355,6 +358,159 @@ Milestone 4 (Validation & UX refinements) adds guardrails: highlight years where
     - Acceptance:
       - APIキーなしで、ChatGPT/Gemini UIを使ってScenario JSONを生成→貼り付け→追加/適用できる。
       - 不正な出力でも白画面にならず、エラー理由が分かる。
+33. Provide AI prompt template presets (AIで条件生成用テンプレートを複数用意):
+    - Goal: ユーザーが「何を書けば良いか分からない」問題を解消し、ChatGPT/Geminiでの生成品質と再現性を上げる。
+    - Template方針:
+      - 「自由入力」ではなく、よくあるケースの“質問票形式”テンプレを複数用意し、コピペでそのまま使える。
+      - 出力は既存の “厳格な出力テンプレ（JSONのみ）” と併用し、入力側だけを改善する（BYOK不要）。
+      - テンプレ内で単位（円/万円/月/年）と不明時の推定方針（0にしない）を明記。
+    - 用意するテンプレ例（初期セット）:
+      - Template A: 共働き+子ども（教育費推定あり、住宅ローンあり、車買い替えあり）
+      - Template B: 単身（賃貸/持ち家どちらも、貯蓄と投資口座の役割分け）
+      - Template C: 夫婦のみ（子なし、住宅/車あり、退職金・年金移行を明示）
+      - Template D: 子ども3人以上（教育費と生活費が段階で変わる想定を促す）
+      - Template E: 住み替えあり（賃貸→購入 / 購入→売却→賃貸 など、housingPlansの期間入力を促す）
+    - データ実装:
+      - `app/public/presets/ai-prompt-templates.json` を追加し、以下の形で管理:
+        - `id`, `title`, `description`, `requestTemplateText`（ユーザーが埋める入力文テンプレ）
+      - 将来拡張: `localStorage` にユーザー独自テンプレを保存できる仕組み（任意）。
+    - UI実装（AiScenarioDialog）:
+      - 「要望」欄の上にテンプレ選択（select）を追加。
+      - 選択時に “要望テキスト” にテンプレを挿入（既存入力がある場合は確認ダイアログ）。
+      - 「コピー」時は、選択テンプレ + ユーザー記入内容を、現在の指示文テンプレに組み込んで出力。
+      - スマホ向け: テンプレ選択とコピー導線を最上部に配置して迷いを減らす。
+    - 互換/品質:
+      - 既存のsanitize（“ ” 自動変換）とJSON検証導線は維持。
+      - テンプレに合わせて指示文側の “不足時の推定” を一貫させる（0にしない/未定は推定）。
+    - Acceptance:
+      - テンプレから入力→コピー→ChatGPT/Gemini→貼り付け→検証→追加/上書きが一連で迷わず行える。
+      - テンプレAで生成したJSONが、子ども住人/教育費帯/住宅費/車買い替え/貯蓄口座が欠けにくい。
+34. Add a guided “wizard” input UI (画像のような優しい入力UI):
+    - Goal: 初見でも迷わず入力できる「ステップ式（ウィザード）」編集画面を用意し、スマホでもストレスなく入力できるようにする。
+    - UXコンセプト（画像の要素）:
+      - 上部: ステップ進行バー（完了/入力中の状態が分かる）
+      - 左: セクションに合わせたイラスト（親しみやすい）
+      - 右: 必須入力を最小限に絞ったフォーム
+      - 「おまかせ設定で入力」トグル（平均的な値を自動入力/推定）
+      - 下部: 「戻る」「次へ進む」ボタン
+    - 画面構成:
+      - Wizardは“既存の詳細編集（ScenarioForm）”とは別モードとして提供:
+        - 条件編集画面に「かんたん入力」「詳細編集」の切替を追加（デフォルトはスマホで“かんたん”）
+        - 既存の詳細編集は残し、パワーユーザー/微調整はそちらで対応
+      - ステップ定義（例）:
+        1) 基本情報（開始年/初期現金）
+        2) 住人（夫/妻/子の追加、年齢、年収、退職/退職金）
+        3) 住宅（賃貸/持ち家、ローン/家賃、管理費/修繕/税）
+        4) 車（現車、年間維持費、買い替え）
+        5) 生活費（現状 + 期間での増減）
+        6) 貯蓄/投資（役割別に初期残高・積立）
+        7) 追加イベント（任意）
+        8) 確認（要約と差分、結果のプレビュー導線）
+    - “おまかせ設定”の実装:
+      - ステップ単位のトグル（住宅だけ/車だけ など）を基本にし、ON時は:
+        - 未入力の項目に代表値を補完（0を減らす）
+        - 入力から推定（例: 生活費=月額×12、子の学年→年齢→教育費帯の自動生成）
+      - 推定は “上書きしない” が原則:
+        - 既に入力済みの値は維持し、空欄/0のみ補完（必要なら「再推定」ボタン）
+      - 推定ロジックは関数化してテスト可能に:
+        - `app/src/utils/estimates/*` に集約（住宅管理費/修繕、退職金目安、車の維持費、教育費帯など）
+    - UIコンポーネント設計:
+      - `WizardEditor`（モード切替/ステップ状態/次へ戻る）
+      - `WizardStepper`（進捗UI: 完了/現在/未）
+      - `WizardCard`（左イラスト+右フォーム+トグル+ナビ）
+      - 既存の `YenInput` / `SliderControl` を再利用しつつ、かんたんモードでは項目数を絞る
+    - 状態管理:
+      - “完了”状態はシナリオ入力の妥当性から算出（例: 住人が1人以上、生活費が0でない等）
+      - Wizard UIの一時状態（現在ステップ、トグルON/OFF）は localStorage（または Zustand UI slice）に保存（シナリオとは分離）
+    - スタイル/アクセシビリティ:
+      - スマホ優先レイアウト（1カラム、ボタンは固定フッタも検討）
+      - ステッパーとトグルはキーボード操作/ARIA対応
+      - イラストはSVG（既存アイコン拡張 or 新規 `app/src/components/illustrations/*`）
+    - 段階導入（最短で価値が出る順）:
+      1) Wizard骨組み + ステッパー + 次へ/戻る（中身は既存セクションの簡易版）
+      2) 住宅/車/生活費の“おまかせ”補完（0削減に効く）
+      3) 住人（子の追加 + 教育費帯の自動生成）
+      4) 貯蓄（役割別の初期口座作成と代表値補完）
+      5) 確認画面（要約/編集へのリンク）
+    - Acceptance:
+      - スマホでウィザードだけを使って一通り入力→結果表示まで到達できる。
+      - “おまかせON”で、住宅の管理費/修繕/税、退職金、車維持費、教育費帯が 0 のままになりにくい。
+      - 詳細編集に切り替えても同じシナリオが壊れず、値の往復ができる。
+35. Add “キャッシュフロー” waterfall visualization (ウォーターフォール図風の内訳表示):
+    - Goal: 年ごとのキャッシュフロー（収入→支出内訳→差引）を「何が効いているか」直感的に把握できるようにする。
+    - UX（段階導入）:
+      - Phase 1: 既存のキャッシュフロー図（時系列）に「年選択」を追加し、選択した1年の内訳を右側（または下）に “ウォーターフォール” で表示。
+        - Year picker: グラフ上のクリック/ホバー、またはスライダー/セレクトで `year` を選べる。
+        - Waterfall panel: `0 → 収入(+) → 支出カテゴリ(-) → 純増減(=netCashFlow)` をステップ表示。
+      - Phase 2: シナリオ比較（2本以上）時は、同一年でシナリオごとに小さなウォーターフォールを並べて差分が分かるようにする（最大2〜3列）。
+      - Phase 3（任意）: “純資産” も含めて `期首残高 → 年間純増減 → 期末残高` の補助ウォーターフォールも表示し、資産推移の理由付けを強化。
+    - Data/計算:
+      - 入力: `Projection.yearly[]` の `YearlyBreakdown` を利用（すでに `income`, `expenses.{living,education,housing,vehicle,other,savingsContribution}`, `netCashFlow` がある）。
+      - Waterfall用の段（segments）を生成する純関数を追加:
+        - `buildCashFlowWaterfall(year: YearlyBreakdown): Array<{ key: string; label: string; delta: number; start: number; end: number }>`
+        - `delta` は収入は正、支出は負。`start/end` は累積（0起点）で計算。
+      - 表示順序（例）:
+        - 収入（+）
+        - 生活費 / 教育 / 住宅 / 車 / その他 / 貯蓄積立（-）
+        - 差引（netCashFlow）を “合計バー” として強調（色・ラベル）
+      - 表示上の注意:
+        - マイナス方向のバー/ラベルの可読性（0線、負側のラベル位置、桁あふれ対策）。
+        - 単位は `万円` 表示（ツールチップは `円` + `万円` 併記でも可）。
+    - UI/実装方針（Victory前提）:
+      - `VictoryBar` を “floating bar” として使い、各段に `y0`（start）と `y`（end）を持たせる（正負両対応）。
+      - 0ラインは `VictoryLine` で明示し、カテゴリ色は既存のCSS変数（`--c-income` など）に揃える。
+      - Hover/tooltip は SVG clipping を避けるため、既存と同様に absolutely-positioned overlay を検討。
+      - “年選択” 状態は UI state（ZustandのUI slice か local state）に保持し、シナリオ切替でも破綻しないようにする。
+    - 受け入れ基準:
+      - キャッシュフロー図から年を選ぶと、同年の内訳が即座にウォーターフォール表示され、各段の金額が確認できる。
+      - マイナス年（赤字）でも見切れず、0線を跨いだ表現が破綻しない。
+      - 複数シナリオでも同一年の比較ができ、「どの費目が差を作っているか」が分かる。
+      - `prefers-reduced-motion: reduce` では過度なアニメーションを無効化する。
+36. Make charts “feel premium” (純資産推移 / キャッシュフロー / ウォーターフォールを統合したいけてるUI):
+    - Goal: 3つの可視化を「迷わず・気持ちよく」行き来でき、年選択・比較・根拠（内訳）が一貫して見える結果画面を作る。
+    - IA / レイアウト:
+      - Resultsは “1画面=1ストーリー” にする:
+        - 上: KPIバー（最終純資産 / 赤字開始年 / 収支ピーク / 重要イベント数 など、クリックで該当年へジャンプ）
+        - 中: 2カラム（左=主グラフ、右=詳細パネル）
+          - 左: `純資産推移` と `キャッシュフロー` をタブ切替（タイトル+ヘルプは共通）
+          - 右: “選択年パネル” を固定表示（年/年齢/差引/内訳ウォーターフォール/イベントログ）
+        - 下: 補助情報（凡例、注意書き、比較サマリーへの導線）
+      - スマホ: 1カラム化し、右パネルは “下にスライドする詳細” or “モーダル（内訳を見る）” に切替。
+    - Interaction（年選択を共通状態に）:
+      - `selectedYear` を “結果画面の共通state” にする（グラフ間で同期）:
+        - 純資産: カーソル移動/クリックで年選択（クロスヘア+ツールチップパネルは画面内で完結）
+        - キャッシュフロー: クリック/タップで年選択（吹き出しは基本OFF、必要なら右パネルで表示）
+        - ウォーターフォール: 常に `selectedYear` の内訳を表示（年が変わると即更新）
+      - 年選択の補助:
+        - 年セレクト（select/slider）＋ “次/前” ボタン（±1年）
+        - 赤字年/イベント年はマーク（dot/badge）して飛べる
+    - Waterfall UX（“根拠”を強く）:
+      - 右パネルに “年の内訳（ウォーターフォール）” を常時表示（PC）:
+        - 収入（+）→ 支出カテゴリ（-）→ 差引（合計バー）
+        - 差引が赤字のときはバー/ラベルを警告色に
+      - “貯蓄残高” の見せ方（任意拡張）:
+        - 右パネルに小さな補助カードで `期首残高 / 差引 / 期末残高` を表示（純資産推移の説明になる）
+        - 可能なら `savingsByAccount` のトップ2口座と変化量も表示
+    - Visual design（いけてる見た目の指針）:
+      - 一貫した色システム:
+        - `収入=緑 / 支出=カテゴリ色 / 差引=黒 or 赤 / 0ライン=薄い境界色`
+        - CSS変数で管理し、凡例・バッジ・ウォーターフォールの合計バーに同じ色を使う
+      - “余白と整列”:
+        - 見出し（h3/h4）と数値のタイポを統一（数字は tabular-nums）
+        - 右パネルはカード化し、スクロールしても選択年が分かるヘッダー固定
+      - Motion:
+        - 純資産は軽いリビール、年選択時は 100–150ms の控えめなハイライトのみ
+        - `prefers-reduced-motion: reduce` では全停止
+    - Accessibility / 操作性:
+      - キーボード: 左右キーで年移動、Enterで固定、Escで選択解除（任意）
+      - スクリーンリーダ: `aria-live` で選択年と差引を読み上げ（過剰更新は避ける）
+    - Performance / 安定性:
+      - 再計算を抑える: `selectedYear` 依存のウォーターフォール計算は `useMemo` で局所化
+      - レイアウト崩れ対策: SVGの横溢れは `overflow-x: auto` で吸収し、軸ラベルは切れないpadding
+    - Acceptance:
+      - 3つの可視化が「年」で連動し、どの年が選択中かが常に分かる。
+      - キャッシュフロー棒をクリックすると右側（or モーダル）にウォーターフォールが即表示される。
+      - スマホでも結果が追える（横スクロール最小、必要ならモーダルに退避）。
 
 ## Validation and Acceptance
 

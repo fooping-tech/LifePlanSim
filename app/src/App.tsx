@@ -4,10 +4,12 @@ import { ScenarioList } from '@components/ScenarioList'
 import { ScenarioForm } from '@components/ScenarioForm'
 import { ScenarioResultsTabs } from '@components/ScenarioResultsTabs'
 import { useBuildInfo } from '@hooks/useBuildInfo'
+import { WizardEditor } from '@components/WizardEditor'
 
 function App() {
   const [isEditorOpen, setEditorOpen] = useState(false)
   const [editorTab, setEditorTab] = useState<'list' | 'form'>('form')
+  const [editorMode, setEditorMode] = useState<'wizard' | 'detail'>('detail')
   const { local, updateAvailable, reload } = useBuildInfo()
 
   return (
@@ -26,7 +28,17 @@ function App() {
           ) : null}
         </div>
         <div className="app-topbar__actions">
-          <button type="button" className="topbar-btn" onClick={() => setEditorOpen(true)}>
+          <button
+            type="button"
+            className="topbar-btn"
+            onClick={() => {
+              const preferWizard =
+                typeof window !== 'undefined' && window.matchMedia?.('(max-width: 900px)')?.matches
+              setEditorMode(preferWizard ? 'wizard' : 'detail')
+              setEditorTab('form')
+              setEditorOpen(true)
+            }}
+          >
             条件を編集
           </button>
         </div>
@@ -61,12 +73,29 @@ function App() {
                     編集
                   </button>
                 </nav>
+                <nav className="editor-panel__nav editor-panel__nav--mode" aria-label="入力モード">
+                  <button
+                    type="button"
+                    className={['editor-nav-btn', editorMode === 'wizard' ? 'is-active' : ''].filter(Boolean).join(' ')}
+                    onClick={() => setEditorMode('wizard')}
+                  >
+                    かんたん入力
+                  </button>
+                  <button
+                    type="button"
+                    className={['editor-nav-btn', editorMode === 'detail' ? 'is-active' : ''].filter(Boolean).join(' ')}
+                    onClick={() => setEditorMode('detail')}
+                  >
+                    詳細
+                  </button>
+                </nav>
                 <button
                   type="button"
                   className="editor-close-btn"
                   onClick={() => {
                     setEditorOpen(false)
                     setEditorTab('form')
+                    setEditorMode('detail')
                   }}
                 >
                   閉じる
@@ -78,7 +107,18 @@ function App() {
                 <ScenarioList />
               </div>
               <div className="editor-panel__column editor-panel__column--form">
-                <ScenarioForm />
+                {editorMode === 'wizard' ? (
+                  <WizardEditor
+                    onClose={() => {
+                      setEditorOpen(false)
+                      setEditorTab('form')
+                      setEditorMode('detail')
+                    }}
+                    onSwitchToDetail={() => setEditorMode('detail')}
+                  />
+                ) : (
+                  <ScenarioForm />
+                )}
               </div>
             </div>
           </div>
