@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
 import { Controller, useFieldArray, useForm, useWatch } from 'react-hook-form'
+import type { FieldPath, FieldPathValue } from 'react-hook-form'
 import type { Scenario } from '@models/scenario'
 import type { HousingPlan, LivingPlan, SavingsAccount, VehicleProfile } from '@models/finance'
 import type { Resident } from '@models/resident'
@@ -76,6 +77,8 @@ type WizardEditorProps = {
   onClose?: () => void
   onSwitchToDetail?: () => void
 }
+
+type WizardSteps = ComponentProps<typeof WizardStepper>['steps']
 
 export const WizardEditor = ({ onClose, onSwitchToDetail }: WizardEditorProps) => {
   const scenario = useScenarioStore((state) =>
@@ -235,7 +238,7 @@ export const WizardEditor = ({ onClose, onSwitchToDetail }: WizardEditorProps) =
     return { basicDone, residentsDone, housingDone, vehicleDone, livingDone, savingsDone }
   }, [watchedValues])
 
-  const stepsForUi = useMemo(() => {
+  const stepsForUi = useMemo<WizardSteps>(() => {
     const isDone = (id: WizardStepId) => {
       switch (id) {
         case 'basic':
@@ -268,9 +271,9 @@ export const WizardEditor = ({ onClose, onSwitchToDetail }: WizardEditorProps) =
                 : id === 'living'
                   ? '生活費'
                   : id === 'savings'
-                    ? '貯蓄'
-                    : '確認',
-      status: id === step ? 'active' : isDone(id) ? 'done' : 'todo',
+                  ? '貯蓄'
+                  : '確認',
+      status: (id === step ? 'active' : isDone(id) ? 'done' : 'todo') as WizardSteps[number]['status'],
     }))
   }, [completion, step])
 
@@ -280,9 +283,9 @@ export const WizardEditor = ({ onClose, onSwitchToDetail }: WizardEditorProps) =
     persistUiState({ step: next })
   }
 
-  const setFormValue = <TPath extends Parameters<typeof setValue>[0]>(
+  const setFormValue = <TPath extends FieldPath<Scenario>>(
     path: TPath,
-    value: Parameters<typeof setValue>[1],
+    value: FieldPathValue<Scenario, TPath>,
   ) => setValue(path, value, { shouldDirty: true, shouldTouch: true, shouldValidate: true })
 
   const stepIndex = WIZARD_STEP_ORDER.indexOf(step)
