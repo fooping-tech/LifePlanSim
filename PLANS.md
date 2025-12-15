@@ -25,6 +25,7 @@ Deliver a browser-based interactive simulator that lets households model long-te
 - [x] (2025-12-14) Added AI request template presets (questionnaire-style) selectable in the AI dialog to improve prompt quality and consistency.
 - [x] (2025-12-15) Switched Wizard quick input from “おまかせ” autofill to preset-based input (residents/housing/vehicle/living/savings).
 - [x] (2025-12-15) Added cashflow year picker + per-year waterfall breakdown panel (single scenario + overview compare).
+- [x] (2025-12-15) Added first-launch onboarding: auto-open “かんたん入力” wizard with quick entry options (wizard / JSON import / AI).
 
 ## Surprises & Discoveries
 
@@ -511,6 +512,60 @@ Milestone 4 (Validation & UX refinements) adds guardrails: highlight years where
       - 3つの可視化が「年」で連動し、どの年が選択中かが常に分かる。
       - キャッシュフロー棒をクリックすると右側（or モーダル）にウォーターフォールが即表示される。
       - スマホでも結果が追える（横スクロール最小、必要ならモーダルに退避）。
+
+37. Open “かんたん入力ウィザード” on initial launch (初期起動でウィザードを自動表示):
+    - Goal: 初回起動時にユーザーが迷わず入力を開始できるよう、結果画面ではなく「かんたん入力ウィザード」を自動で開く。
+    - 表示条件（初期案）:
+      - 初回起動のみ自動表示（localStorageでフラグ管理）。
+      - 例外: すでにユーザーが「閉じる」した後は自動表示しない（ユーザーの意思を尊重）。
+      - 例外: URLスナップショット（`#snapshot=` 等）で読み込んだ場合は自動表示しない（共有リンク閲覧を妨げない）。
+    - UI/導線:
+      - 起動直後に編集オーバーレイを開き、入力モードは `wizard` を選択した状態にする。
+      - 画面幅が狭い（例: max-width 900px）場合は既存方針どおり `wizard`、広い場合も初回は `wizard` を優先。
+      - ウィザード内に「閉じる / あとで入力する」導線を残し、閉じたらフラグを保存。
+      - 既存の上部「条件を編集」ボタンでいつでも再度開ける（現状維持）。
+      - 任意: もう一度表示したい人向けに「初回ガイドを再表示」トグル/ボタンをどこかに用意（設定 or 条件編集内）。
+    - 実装方針:
+      - `App.tsx` に初回起動判定を追加:
+        - `lifePlan.onboarding.dismissed.v1` のようなキーで `dismissed=true` を保存。
+        - `useEffect` で初回のみ `setEditorOpen(true)`, `setEditorTab('form')`, `setEditorMode('wizard')` を実行。
+      - 共有リンク判定:
+        - 既存の `extractSnapshotFromLocation()`（`@utils/persistence`）を流用し、snapshotが存在する場合は自動表示を抑止。
+      - 閉じる時の挙動:
+        - 既存の閉じるボタン/`WizardEditor.onClose` 経由で `dismissed=true` を保存（少なくとも「初回自動表示」は止める）。
+    - Acceptance:
+      - 初回起動で自動的に「かんたん入力」が開き、すぐ入力開始できる。
+      - 閉じた後の再訪では勝手に開かない。
+      - 共有リンク（snapshot）を開いたときは勝手に開かず、結果閲覧ができる。
+      - `npm run lint`, `npm test` が通り、`npm run build`（CI）でも型エラーが出ない。
+
+38. Show “読み込み(インポート)” と “AIで作成” を初期起動ガイドに含める:
+    - Goal: 初回起動で「入力する」以外の開始方法（読み込み / AIで作成）も同時に提示し、ユーザーが最短で目的に到達できるようにする。
+    - 体験設計（初回のみ）:
+      - 起動直後は編集オーバーレイを開き、上部に「開始方法」セクションを追加:
+        - かんたん入力（ウィザードを開く）…推奨（Primary）
+        - 読み込み（JSON/ファイル）…既存のインポートUIへ誘導（Secondary）
+        - AIで作成（コピー&貼り付け）…既存のAIダイアログへ誘導（Secondary）
+      - それぞれ1行の説明（何ができるか/必要なもの）を付ける（迷いを減らす）。
+    - 実装方針:
+      - `App.tsx`:
+        - 初回起動時の `editorTab` は `form` のまま開く（既存構成を維持）。
+        - 初回ガイド用に `editorMode` を `wizard` に設定しつつ、ガイドパネル（開始方法）を表示できるフラグを追加。
+      - `WizardEditor`（またはWizard用のラッパー）:
+        - 上部に「開始方法」カードを表示（初回のみ/または “ガイド表示” がONのとき）。
+        - 「読み込み」ボタン:
+          - 既存の読み込み導線（ScenarioList側のインポートUI）へジャンプするため、`onSwitchToList` を新設して `editorTab='list'` に切替。
+          - 可能なら “読み込み（追加/置換）” の説明も表示（事故防止）。
+        - 「AIで作成」ボタン:
+          - 既存のAIダイアログを開くコールバックを受け取る（`onOpenAiDialog`）。
+          - 既存UIがScenarioList側にある場合は `editorTab='list'` へ切替してからAIを開く（2段階でも良い）。
+      - 状態保存:
+        - 初回ガイドの非表示フラグは 37 と同じ `lifePlan.onboarding.dismissed.v1` でまとめて扱う（分岐を増やさない）。
+    - Acceptance:
+      - 初回起動で「かんたん入力」だけでなく「読み込み」「AIで作成」の導線が画面内に見える。
+      - 「読み込み」を押すと読み込み操作ができる画面へ到達できる（最低限一覧タブへ移動）。
+      - 「AIで作成」を押すとAI作成画面へ到達できる（ダイアログが開く/またはAIセクションへスクロール）。
+      - 2回目以降は自動表示されず、必要なら任意で再表示できる。
 
 ## Validation and Acceptance
 

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useScenarioStore } from '@store/scenarioStore'
 import { useShallow } from 'zustand/react/shallow'
 import { downloadScenarioSet, readScenarioFile } from '@utils/persistence'
@@ -6,11 +6,26 @@ import { IconDownload, IconFileJson, IconLink, IconUpload } from '@components/ic
 import { AiScenarioDialog } from '@components/AiScenarioDialog'
 import type { Scenario } from '@models/scenario'
 
-export const ScenarioList = () => {
+type ScenarioListProps = {
+  aiOpen?: boolean
+  onAiOpenChange?: (open: boolean) => void
+}
+
+export const ScenarioList = ({ aiOpen: aiOpenProp, onAiOpenChange }: ScenarioListProps) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [status, setStatus] = useState('')
   const [importMode, setImportMode] = useState<'replace' | 'append'>('replace')
-  const [aiOpen, setAiOpen] = useState(false)
+  const [aiOpenInternal, setAiOpenInternal] = useState(false)
+  const aiOpen = typeof aiOpenProp === 'boolean' ? aiOpenProp : aiOpenInternal
+  const setAiOpen = useCallback(
+    (next: boolean) => {
+      if (typeof aiOpenProp !== 'boolean') {
+        setAiOpenInternal(next)
+      }
+      onAiOpenChange?.(next)
+    },
+    [aiOpenProp, onAiOpenChange],
+  )
   const {
     scenarios,
     activeScenarioId,

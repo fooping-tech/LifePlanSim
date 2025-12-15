@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import './App.css'
 import { ScenarioList } from '@components/ScenarioList'
 import { ScenarioForm } from '@components/ScenarioForm'
@@ -6,11 +6,51 @@ import { ScenarioResultsTabs } from '@components/ScenarioResultsTabs'
 import { useBuildInfo } from '@hooks/useBuildInfo'
 import { WizardEditor } from '@components/WizardEditor'
 
+const ONBOARDING_DISMISSED_KEY = 'lifePlan.onboarding.dismissed.v1'
+
+const hasSnapshotParam = (): boolean => {
+  if (typeof window === 'undefined') {
+    return false
+  }
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+  if (hashParams.get('s') || hashParams.get('snapshot')) {
+    return true
+  }
+  const params = new URLSearchParams(window.location.search)
+  return Boolean(params.get('s') || params.get('snapshot'))
+}
+
 function App() {
-  const [isEditorOpen, setEditorOpen] = useState(false)
+  const initialLaunch = useMemo(() => {
+    if (typeof window === 'undefined') {
+      return { autoOpenEditor: false, showOnboarding: false }
+    }
+    try {
+      const dismissed = window.localStorage.getItem(ONBOARDING_DISMISSED_KEY) === 'true'
+      const autoOpen = !dismissed && !hasSnapshotParam()
+      return { autoOpenEditor: autoOpen, showOnboarding: autoOpen }
+    } catch {
+      return { autoOpenEditor: false, showOnboarding: false }
+    }
+  }, [])
+
+  const [isEditorOpen, setEditorOpen] = useState(initialLaunch.autoOpenEditor)
   const [editorTab, setEditorTab] = useState<'list' | 'form'>('form')
-  const [editorMode, setEditorMode] = useState<'wizard' | 'detail'>('detail')
+  const [editorMode, setEditorMode] = useState<'wizard' | 'detail'>(initialLaunch.autoOpenEditor ? 'wizard' : 'detail')
+  const [showOnboarding, setShowOnboarding] = useState(initialLaunch.showOnboarding)
+  const [aiDialogOpen, setAiDialogOpen] = useState(false)
   const { local, updateAvailable, reload } = useBuildInfo()
+
+  const dismissOnboarding = () => {
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(ONBOARDING_DISMISSED_KEY, 'true')
+      } catch {
+        // ignore
+      }
+    }
+    setShowOnboarding(false)
+  }
 
   return (
     <div className="app-shell">
@@ -36,6 +76,8 @@ function App() {
                 typeof window !== 'undefined' && window.matchMedia?.('(max-width: 900px)')?.matches
               setEditorMode(preferWizard ? 'wizard' : 'detail')
               setEditorTab('form')
+              setShowOnboarding(false)
+              setAiDialogOpen(false)
               setEditorOpen(true)
             }}
           >
@@ -96,6 +138,8 @@ function App() {
                     setEditorOpen(false)
                     setEditorTab('form')
                     setEditorMode('detail')
+                    dismissOnboarding()
+                    setAiDialogOpen(false)
                   }}
                 >
                   閉じる
@@ -104,7 +148,7 @@ function App() {
             </header>
             <div className="editor-panel__body" data-tab={editorTab}>
               <div className="editor-panel__column editor-panel__column--list">
-                <ScenarioList />
+                <ScenarioList aiOpen={aiDialogOpen} onAiOpenChange={setAiDialogOpen} />
               </div>
               <div className="editor-panel__column editor-panel__column--form">
                 {editorMode === 'wizard' ? (
@@ -113,8 +157,17 @@ function App() {
                       setEditorOpen(false)
                       setEditorTab('form')
                       setEditorMode('detail')
+                      dismissOnboarding()
+                      setAiDialogOpen(false)
                     }}
                     onSwitchToDetail={() => setEditorMode('detail')}
+                    onSwitchToList={() => setEditorTab('list')}
+                    onOpenAi={() => {
+                      setEditorTab('list')
+                      setAiDialogOpen(true)
+                    }}
+                    showOnboarding={showOnboarding}
+                    onDismissOnboarding={dismissOnboarding}
                   />
                 ) : (
                   <ScenarioForm />
