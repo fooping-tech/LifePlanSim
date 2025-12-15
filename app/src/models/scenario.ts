@@ -36,6 +36,7 @@ export interface YearlyBreakdown {
   index: number
   agesByResident: Record<string, number>
   income: number
+  investmentIncome?: number
   expenses: {
     living: number
     education: number

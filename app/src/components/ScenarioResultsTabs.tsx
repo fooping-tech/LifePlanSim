@@ -441,6 +441,10 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
   const [view, setView] = useState<'netWorth' | 'cashFlow'>('netWorth')
   const [selectedYear, setSelectedYear] = useState<number>(() => scenario.yearly[0]?.year ?? new Date().getFullYear())
   const yearOptions = useMemo(() => scenario.yearly.map((entry) => entry.year), [scenario.yearly])
+  const totalInvestmentIncome = useMemo(
+    () => scenario.yearly.reduce((sum, entry) => sum + (entry.investmentIncome ?? 0), 0),
+    [scenario.yearly],
+  )
   const selectedYearEntry = useMemo(
     () => findNearestYearlyEntry(scenario.yearly, selectedYear),
     [scenario.yearly, selectedYear],
@@ -666,6 +670,10 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
                   <span>差引</span>
                   <strong>{formatCurrency(selectedYearEntry.netCashFlow)}</strong>
                 </div>
+                <div>
+                  <span>運用益</span>
+                  <strong>{formatCurrency(selectedYearEntry.investmentIncome ?? 0)}</strong>
+                </div>
               </div>
               <div className="results-detail__waterfall">
                 <div className="chart-block__header">
@@ -699,6 +707,9 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
       <ul className="scenario-results__summary">
         <li>
           総収入 <strong>{formatCurrency(scenario.summary.totalIncome)}</strong>
+        </li>
+        <li>
+          総運用益 <strong>{formatCurrency(totalInvestmentIncome)}</strong>
         </li>
         <li>
           総支出 <strong>{formatCurrency(scenario.summary.totalExpenses)}</strong>

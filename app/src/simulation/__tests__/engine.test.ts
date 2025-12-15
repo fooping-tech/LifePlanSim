@@ -144,6 +144,46 @@ describe('simulateScenario', () => {
     expect(firstYear.savingsByAccount.cash).toBeGreaterThan(0)
   })
 
+  it('counts savings interest as income (cashflow aligns with net worth growth)', () => {
+    const projection = simulateScenario(
+      {
+        id: 'interest-income',
+        name: 'Interest Income',
+        startYear: 2025,
+        residents: [],
+        living: {
+          baseAnnual: 0,
+          insuranceAnnual: 0,
+          utilitiesAnnual: 0,
+          discretionaryAnnual: 0,
+          healthcareAnnual: 0,
+          inflationRate: 0,
+        },
+        savingsAccounts: [
+          {
+            id: 'invest',
+            label: '運用口座',
+            type: 'investment',
+            balance: 1_000_000,
+            annualContribution: 0,
+            annualInterestRate: 0.1,
+            adjustable: true,
+          },
+        ],
+        initialCash: 0,
+      },
+      { horizonYears: 1 },
+    )
+
+    expect(projection.summary.totalIncome).toBeCloseTo(100_000)
+    expect(projection.summary.totalExpenses).toBeCloseTo(0)
+    expect(projection.yearly[0]?.income).toBeCloseTo(100_000)
+    expect(projection.yearly[0]?.investmentIncome).toBeCloseTo(100_000)
+    expect(projection.yearly[0]?.netCashFlow).toBeCloseTo(100_000)
+    expect(projection.yearly[0]?.netWorth).toBeCloseTo(1_100_000)
+    expect(projection.yearly[0]?.events).toContain('運用益')
+  })
+
   it('models vehicle replacement using purchaseYear/disposalYear', () => {
     const startYear = 2025
     const projection = simulateScenario(
