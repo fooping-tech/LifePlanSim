@@ -122,3 +122,17 @@ export const IconLink = (props: IconProps) => (
     <path d="M14 11a5 5 0 0 1 0 7l-1 1a5 5 0 0 1-7-7l1-1" />
   </SvgIcon>
 )
+
+export const IconSparkles = (props: IconProps) => (
+  <SvgIcon {...props}>
+    <path d="M12 2l1.2 3.6L17 7l-3.8 1.4L12 12l-1.2-3.6L7 7l3.8-1.4L12 2z" />
+    <path d="M19 12l.8 2.4L22 15l-2.2.6L19 18l-.8-2.4L16 15l2.2-.6L19 12z" />
+    <path d="M4.8 12l.8 2.4L8 15l-2.4.6L4.8 18 4 15.6 1.6 15 4 14.4 4.8 12z" />
+  </SvgIcon>
+)
+
+export const IconCheck = (props: IconProps) => (
+  <SvgIcon {...props}>
+    <path d="M20 6 9 17l-5-5" />
+  </SvgIcon>
+)

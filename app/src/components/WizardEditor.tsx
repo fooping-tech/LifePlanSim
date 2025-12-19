@@ -76,10 +76,6 @@ const annualFromMonthlyManYen = (monthlyManYen: number) => Math.round((monthlyMa
 type WizardEditorProps = {
   onClose?: () => void
   onSwitchToDetail?: () => void
-  onSwitchToList?: () => void
-  onOpenAi?: () => void
-  showOnboarding?: boolean
-  onDismissOnboarding?: () => void
 }
 
 type WizardSteps = ComponentProps<typeof WizardStepper>['steps']
@@ -87,10 +83,6 @@ type WizardSteps = ComponentProps<typeof WizardStepper>['steps']
 export const WizardEditor = ({
   onClose,
   onSwitchToDetail,
-  onSwitchToList,
-  onOpenAi,
-  showOnboarding,
-  onDismissOnboarding,
 }: WizardEditorProps) => {
   const scenario = useScenarioStore((state) =>
     state.scenarios.find((item) => item.id === state.activeScenarioId),
@@ -344,53 +336,6 @@ export const WizardEditor = ({
         </aside>
 
         <div className="wizard-card__body">
-          {showOnboarding ? (
-            <div className="wizard-onboarding" aria-label="開始方法">
-              <h3>まずは開始方法を選びましょう</h3>
-              <p className="wizard-help">入力を始める / JSONを読み込む / AIで作成（コピー&貼り付け）を選べます。</p>
-              <div className="wizard-onboarding__actions">
-                <button
-                  type="button"
-                  className="wizard-nav__btn wizard-nav__btn--primary"
-                  onClick={() => onDismissOnboarding?.()}
-                >
-                  かんたん入力を始める
-                </button>
-                <button
-                  type="button"
-                  className="wizard-nav__btn wizard-nav__btn--ghost"
-                  onClick={() => {
-                    onDismissOnboarding?.()
-                    onSwitchToList?.()
-                  }}
-                >
-                  JSONを読み込む
-                </button>
-                <button
-                  type="button"
-                  className="wizard-nav__btn wizard-nav__btn--ghost"
-                  onClick={() => {
-                    onDismissOnboarding?.()
-                    onOpenAi?.()
-                  }}
-                >
-                  AIで作成
-                </button>
-              </div>
-              <div className="wizard-onboarding__footer">
-                <button
-                  type="button"
-                  className="wizard-stepper__btn"
-                  onClick={() => {
-                    onDismissOnboarding?.()
-                    onClose?.()
-                  }}
-                >
-                  あとで
-                </button>
-              </div>
-            </div>
-          ) : null}
           {step === 'basic' ? (
             <>
               <h3>基本情報</h3>

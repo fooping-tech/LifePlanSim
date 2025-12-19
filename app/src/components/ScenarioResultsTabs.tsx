@@ -438,6 +438,7 @@ interface ScenarioChartsProps {
 }
 
 const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
+  const duplicateScenario = useScenarioStore((state) => state.duplicateScenario)
   const [view, setView] = useState<'netWorth' | 'cashFlow'>('netWorth')
   const [selectedYear, setSelectedYear] = useState<number>(() => scenario.yearly[0]?.year ?? new Date().getFullYear())
   const yearOptions = useMemo(() => scenario.yearly.map((entry) => entry.year), [scenario.yearly])
@@ -697,6 +698,31 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
                   <p className="chart-note">この年にイベントはありません。</p>
                 </div>
               )}
+
+              <div className="results-next-actions" aria-label="次にやること">
+                <h4>次にやること</h4>
+                <div className="results-next-actions__buttons">
+                  <button
+                    type="button"
+                    className="chart-inline-btn"
+                    onClick={() => duplicateScenario(scenario.id)}
+                  >
+                    シナリオを複製して比較
+                  </button>
+                  {scenario.summary.firstNegativeYear ? (
+                    <button
+                      type="button"
+                      className="chart-inline-btn"
+                      onClick={() => setSelectedYear(scenario.summary.firstNegativeYear ?? selectedYearResolved)}
+                    >
+                      赤字開始年へ移動
+                    </button>
+                  ) : null}
+                </div>
+                <p className="chart-note">
+                  生活費や住宅費を少し変えて、差がどこで出るか（右側の内訳）で確認するのがおすすめです。
+                </p>
+              </div>
             </>
           ) : (
             <p className="chart-note">年データがありません。</p>
