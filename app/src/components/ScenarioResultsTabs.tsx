@@ -12,6 +12,7 @@ import {
 } from 'victory'
 import { useScenarioStore } from '@store/scenarioStore'
 import type { YearlyBreakdown } from '@models/scenario'
+import { useAppActions } from '@utils/appActionsContext'
 
 const colors = ['#2563eb', '#16a34a', '#f97316', '#9333ea', '#0ea5e9', '#f43f5e']
 const INCOME_CATEGORY = { key: 'income', label: '収入', color: '#22c55e' as const }
@@ -26,8 +27,8 @@ const formatCurrency = (value: number) =>
 const formatAxisManYen = (value: number) =>
   new Intl.NumberFormat('ja-JP', { maximumFractionDigits: 0 }).format(value / 10_000)
 
-const defaultChartPadding = { top: 40, bottom: 100, left: 110, right: 40 }
-const netWorthChartPadding = { top: 40, bottom: 88, left: 150, right: 48 }
+const defaultChartPadding = { top: 28, bottom: 78, left: 96, right: 28 }
+const netWorthChartPadding = { top: 28, bottom: 70, left: 120, right: 28 }
 const dependentAxisStyle = {
   axisLabel: { padding: 62, fontSize: 12, fill: '#475569' },
   tickLabels: { fontSize: 10, padding: 4 },
@@ -290,12 +291,14 @@ export const ScenarioResultsTabs = () => {
   const projections = useScenarioStore((state) => state.projections)
   const scenarios = useScenarioStore((state) => state.scenarios)
   const comparison = useScenarioStore((state) => state.comparison)
+  const activeScenarioId = useScenarioStore((state) => state.activeScenarioId)
+  const selectScenario = useScenarioStore((state) => state.selectScenario)
   const SPECIAL_TABS = {
     overview: 'overview',
     comparison: 'comparison',
   } as const
 
-  const [activeTab, setActiveTab] = useState<string>(() => projections[0]?.scenarioId ?? SPECIAL_TABS.overview)
+  const [activeTab, setActiveTab] = useState<string>(() => activeScenarioId ?? projections[0]?.scenarioId ?? SPECIAL_TABS.overview)
 
   const chartData = useMemo(
     () =>
@@ -317,6 +320,11 @@ export const ScenarioResultsTabs = () => {
         }))
         const inputScenario = scenarios.find((scenario) => scenario.id === projection.scenarioId)
         const residents = (inputScenario?.residents ?? []).map((resident) => ({ id: resident.id, name: resident.name }))
+        const savingsAccountsMeta = (inputScenario?.savingsAccounts ?? []).map((account) => ({
+          id: account.id,
+          label: account.label,
+          annualInterestRate: account.annualInterestRate,
+        }))
         return {
           id: projection.scenarioId,
           label: projection.scenarioName,
@@ -328,6 +336,7 @@ export const ScenarioResultsTabs = () => {
         cashExpenseSeries: expenseSeriesNegative,
           yearly: projection.yearly,
           residents,
+          savingsAccountsMeta,
           waterfallData: buildWaterfallData(projection.yearly),
           summary: projection.summary,
         }
@@ -341,6 +350,14 @@ export const ScenarioResultsTabs = () => {
     chartData.some((scenario) => scenario.id === activeTab)
       ? activeTab
       : chartData[0]?.id ?? SPECIAL_TABS.overview
+
+  useLayoutEffect(() => {
+    if (!activeScenarioId) return
+    if (activeTab === SPECIAL_TABS.overview || activeTab === SPECIAL_TABS.comparison) return
+    if (activeTab === activeScenarioId) return
+    if (!chartData.some((scenario) => scenario.id === activeScenarioId)) return
+    setActiveTab(activeScenarioId)
+  }, [activeScenarioId, activeTab, chartData])
 
   if (!chartData.length) {
     return (
@@ -363,7 +380,10 @@ export const ScenarioResultsTabs = () => {
             role="tab"
             aria-selected={resolvedTab === scenario.id}
             className={['tab-nav__btn', resolvedTab === scenario.id ? 'is-active' : ''].join(' ').trim()}
-            onClick={() => setActiveTab(scenario.id)}
+            onClick={() => {
+              setActiveTab(scenario.id)
+              selectScenario(scenario.id)
+            }}
           >
             {scenario.label}
           </button>
@@ -425,6 +445,7 @@ interface ScenarioChartsProps {
     cashFlowSeries: CashFlowSeriesEntry[]
     yearly: YearlyBreakdown[]
     residents: Array<{ id: string; name: string }>
+    savingsAccountsMeta: Array<{ id: string; label: string; annualInterestRate: number }>
     waterfallData: WaterfallEntry[]
     summary: {
       totalIncome: number
@@ -438,9 +459,11 @@ interface ScenarioChartsProps {
 }
 
 const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
+  const { openEditor } = useAppActions()
   const duplicateScenario = useScenarioStore((state) => state.duplicateScenario)
   const [view, setView] = useState<'netWorth' | 'cashFlow'>('netWorth')
   const [selectedYear, setSelectedYear] = useState<number>(() => scenario.yearly[0]?.year ?? new Date().getFullYear())
+  const [kpiModal, setKpiModal] = useState<null | 'netWorth' | 'netCashFlow' | 'investmentIncome'>(null)
   const yearOptions = useMemo(() => scenario.yearly.map((entry) => entry.year), [scenario.yearly])
   const totalInvestmentIncome = useMemo(
     () => scenario.yearly.reduce((sum, entry) => sum + (entry.investmentIncome ?? 0), 0),
@@ -476,6 +499,17 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
     () => yearOptions.findIndex((year) => year === selectedYearResolved),
     [yearOptions, selectedYearResolved],
   )
+
+  useLayoutEffect(() => {
+    if (!kpiModal) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setKpiModal(null)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [kpiModal])
 
   return (
     <div className="scenario-results">
@@ -665,24 +699,45 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
                 </div>
                 <div>
                   <span>純資産</span>
-                  <strong>{formatMillionYen(selectedYearEntry.netWorth)}百万円</strong>
+                  <button
+                    type="button"
+                    className="kpi-value-btn"
+                    aria-haspopup="dialog"
+                    onClick={() => setKpiModal('netWorth')}
+                  >
+                    {formatMillionYen(selectedYearEntry.netWorth)}百万円
+                  </button>
                 </div>
                 <div>
                   <span>差引</span>
-                  <strong>{formatCurrency(selectedYearEntry.netCashFlow)}</strong>
+                  <button
+                    type="button"
+                    className="kpi-value-btn"
+                    aria-haspopup="dialog"
+                    onClick={() => setKpiModal('netCashFlow')}
+                  >
+                    {formatCurrency(selectedYearEntry.netCashFlow)}
+                  </button>
                 </div>
                 <div>
                   <span>運用益</span>
-                  <strong>{formatCurrency(selectedYearEntry.investmentIncome ?? 0)}</strong>
+                  <button
+                    type="button"
+                    className="kpi-value-btn"
+                    aria-haspopup="dialog"
+                    onClick={() => setKpiModal('investmentIncome')}
+                  >
+                    {formatCurrency(selectedYearEntry.investmentIncome ?? 0)}
+                  </button>
                 </div>
               </div>
-              <div className="results-detail__waterfall">
-                <div className="chart-block__header">
-                  <h4>内訳（ウォーターフォール）</h4>
-                  <span>差引 {formatCurrency(selectedYearEntry.netCashFlow)}</span>
-                </div>
-                <WaterfallChart data={selectedWaterfall} width={520} height={280} />
-              </div>
+	              <div className="results-detail__waterfall">
+	                <div className="chart-block__header">
+	                  <h4>内訳（ウォーターフォール）</h4>
+	                  <span>差引 {formatCurrency(selectedYearEntry.netCashFlow)}</span>
+	                </div>
+	                <WaterfallChart data={selectedWaterfall} width={420} height={180} />
+	              </div>
               {selectedYearEntry.events?.length ? (
                 <div className="results-detail__events">
                   <h4>イベント</h4>
@@ -702,6 +757,13 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
               <div className="results-next-actions" aria-label="次にやること">
                 <h4>次にやること</h4>
                 <div className="results-next-actions__buttons">
+                  <button
+                    type="button"
+                    className="chart-inline-btn chart-inline-btn--primary"
+                    onClick={() => openEditor({ mode: 'wizard', tab: 'form' })}
+                  >
+                    詳細条件を確認する
+                  </button>
                   <button
                     type="button"
                     className="chart-inline-btn"
@@ -729,6 +791,129 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
           )}
         </aside>
       </div>
+
+      {kpiModal && selectedYearEntry ? (
+        <div
+          className="kpi-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="計算内訳"
+          onClick={() => setKpiModal(null)}
+        >
+          <div className="kpi-modal__panel" onClick={(event) => event.stopPropagation()}>
+            <header className="kpi-modal__header">
+              <div>
+                <h3 className="kpi-modal__title">
+                  {selectedYearEntry.year}年の
+                  {kpiModal === 'netWorth' ? '純資産' : kpiModal === 'netCashFlow' ? '差引' : '運用益'} 内訳
+                </h3>
+                <p className="kpi-modal__subtitle">クリックした値の計算に使った要素を表示します（概算）。</p>
+              </div>
+              <button type="button" className="kpi-modal__close-btn" onClick={() => setKpiModal(null)}>
+                閉じる
+              </button>
+            </header>
+
+            {kpiModal === 'netCashFlow' ? (
+              <div className="kpi-modal__body">
+                <dl className="kpi-breakdown">
+                  <div className="kpi-breakdown__row">
+                    <dt>収入（給与など）</dt>
+                    <dd>{formatCurrency(selectedYearEntry.income - (selectedYearEntry.investmentIncome ?? 0))}</dd>
+                  </div>
+                  <div className="kpi-breakdown__row">
+                    <dt>運用益</dt>
+                    <dd>{formatCurrency(selectedYearEntry.investmentIncome ?? 0)}</dd>
+                  </div>
+                  <div className="kpi-breakdown__divider" />
+                  <div className="kpi-breakdown__row">
+                    <dt>生活費</dt>
+                    <dd>-{formatCurrency(selectedYearEntry.expenses.living)}</dd>
+                  </div>
+                  <div className="kpi-breakdown__row">
+                    <dt>教育費</dt>
+                    <dd>-{formatCurrency(selectedYearEntry.expenses.education)}</dd>
+                  </div>
+                  <div className="kpi-breakdown__row">
+                    <dt>住宅費</dt>
+                    <dd>-{formatCurrency(selectedYearEntry.expenses.housing)}</dd>
+                  </div>
+                  <div className="kpi-breakdown__row">
+                    <dt>車</dt>
+                    <dd>-{formatCurrency(selectedYearEntry.expenses.vehicle)}</dd>
+                  </div>
+                  <div className="kpi-breakdown__row">
+                    <dt>その他</dt>
+                    <dd>-{formatCurrency(selectedYearEntry.expenses.other)}</dd>
+                  </div>
+                  <div className="kpi-breakdown__row">
+                    <dt>貯蓄積立</dt>
+                    <dd>-{formatCurrency(selectedYearEntry.expenses.savingsContribution)}</dd>
+                  </div>
+                  <div className="kpi-breakdown__divider" />
+                  <div className="kpi-breakdown__row kpi-breakdown__row--total">
+                    <dt>差引</dt>
+                    <dd>{formatCurrency(selectedYearEntry.netCashFlow)}</dd>
+                  </div>
+                </dl>
+              </div>
+            ) : null}
+
+            {kpiModal === 'netWorth' ? (
+              <div className="kpi-modal__body">
+                {(() => {
+                  const savingsTotal = Object.values(selectedYearEntry.savingsByAccount ?? {}).reduce((sum, value) => sum + value, 0)
+                  const cashOnHand = selectedYearEntry.netWorth - savingsTotal
+                  return (
+                    <dl className="kpi-breakdown">
+                      <div className="kpi-breakdown__row">
+                        <dt>現金</dt>
+                        <dd>{formatCurrency(cashOnHand)}</dd>
+                      </div>
+                      <div className="kpi-breakdown__divider" />
+                      {scenario.savingsAccountsMeta.map((account) => (
+                        <div key={account.id} className="kpi-breakdown__row">
+                          <dt>{account.label}</dt>
+                          <dd>{formatCurrency(selectedYearEntry.savingsByAccount?.[account.id] ?? 0)}</dd>
+                        </div>
+                      ))}
+                      <div className="kpi-breakdown__divider" />
+                      <div className="kpi-breakdown__row kpi-breakdown__row--total">
+                        <dt>純資産</dt>
+                        <dd>{formatCurrency(selectedYearEntry.netWorth)}</dd>
+                      </div>
+                    </dl>
+                  )
+                })()}
+              </div>
+            ) : null}
+
+            {kpiModal === 'investmentIncome' ? (
+              <div className="kpi-modal__body">
+                <dl className="kpi-breakdown">
+                  {scenario.savingsAccountsMeta.map((account) => {
+                    const growth = selectedYearEntry.investmentIncomeByAccount?.[account.id] ?? 0
+                    return (
+                      <div key={account.id} className="kpi-breakdown__row">
+                        <dt>
+                          {account.label}
+                          <span className="kpi-breakdown__meta">（年利 {Math.round(account.annualInterestRate * 1000) / 10}%）</span>
+                        </dt>
+                        <dd>{formatCurrency(growth)}</dd>
+                      </div>
+                    )
+                  })}
+                  <div className="kpi-breakdown__divider" />
+                  <div className="kpi-breakdown__row kpi-breakdown__row--total">
+                    <dt>運用益 合計</dt>
+                    <dd>{formatCurrency(selectedYearEntry.investmentIncome ?? 0)}</dd>
+                  </div>
+                </dl>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       <ul className="scenario-results__summary">
         <li>
@@ -1103,9 +1288,9 @@ const CombinedCharts = ({
                     </strong>
                     <span>差引 {formatCurrency(yearEntry.netCashFlow)}</span>
                   </div>
-                  <div className="results-detail__scenario-waterfall">
-                    <WaterfallChart data={waterfall} width={520} height={260} />
-                  </div>
+	                  <div className="results-detail__scenario-waterfall">
+	                    <WaterfallChart data={waterfall} width={420} height={170} />
+	                  </div>
                   {yearEntry.events?.length ? (
                     <div className="results-detail__scenario-events">
                       <h4>イベント</h4>

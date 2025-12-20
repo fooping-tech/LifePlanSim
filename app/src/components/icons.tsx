@@ -136,3 +136,17 @@ export const IconCheck = (props: IconProps) => (
     <path d="M20 6 9 17l-5-5" />
   </SvgIcon>
 )
+
+export const IconClock = (props: IconProps) => (
+  <SvgIcon {...props}>
+    <path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z" />
+    <path d="M12 6v6l4 2" />
+  </SvgIcon>
+)
+
+export const IconShield = (props: IconProps) => (
+  <SvgIcon {...props}>
+    <path d="M12 2 20 6v6c0 6-4.5 9.5-8 10-3.5-.5-8-4-8-10V6l8-4z" />
+    <path d="M9.5 12.5 11 14l3.5-4" />
+  </SvgIcon>
+)

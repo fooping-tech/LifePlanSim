@@ -174,6 +174,7 @@ export const WizardEditor = ({
   const [vehiclePresetOpen, setVehiclePresetOpen] = useState(false)
   const [livingPresetOpen, setLivingPresetOpen] = useState(false)
   const [savingsPresetOpen, setSavingsPresetOpen] = useState(false)
+  const [savingsContributionUnits, setSavingsContributionUnits] = useState<Record<string, 'month' | 'year'>>({})
 
   const ensureMinimumArrays = useCallback(() => {
     if (!housingFields.length) {
@@ -311,7 +312,6 @@ export const WizardEditor = ({
           const next = id as WizardStepId
           const nextIndex = WIZARD_STEP_ORDER.indexOf(next)
           if (nextIndex < 0) return
-          if (nextIndex > stepIndex) return
           goStep(next)
         }}
       />
@@ -951,10 +951,11 @@ export const WizardEditor = ({
                 </div>
               </div>
               <div className="wizard-list">
-                {savingsFields.map((field, idx) => {
-                  const account = (watchedValues.savingsAccounts?.[idx] as SavingsAccount | undefined) ?? (field as unknown as SavingsAccount)
-                  return (
-                    <div key={field.fieldKey} className="wizard-mini-card">
+	                {savingsFields.map((field, idx) => {
+	                  const account = (watchedValues.savingsAccounts?.[idx] as SavingsAccount | undefined) ?? (field as unknown as SavingsAccount)
+	                  const contributionUnit = savingsContributionUnits[account.id] ?? (account.type === 'investment' ? 'month' : 'year')
+	                  return (
+	                    <div key={field.fieldKey} className="wizard-mini-card">
                       <div className="wizard-mini-card__header">
                         <strong>{account.label || `口座 ${idx + 1}`}</strong>
                         <button
@@ -971,7 +972,7 @@ export const WizardEditor = ({
                           削除
                         </button>
                       </div>
-                      <div className="wizard-grid">
+	                      <div className="wizard-grid">
                         <label>
                           役割
                           <select
@@ -988,8 +989,8 @@ export const WizardEditor = ({
                             <option value="long_term">長期投資</option>
                           </select>
                         </label>
-                        <label className="wizard-span-2">
-                          残高
+	                        <label className="wizard-span-2">
+	                          残高
                           <Controller
                             control={control}
                             name={`savingsAccounts.${idx}.balance` as const}
@@ -997,11 +998,75 @@ export const WizardEditor = ({
                               <YenInput value={yenField.value ?? 0} ariaLabel="残高" onChange={yenField.onChange} onBlur={yenField.onBlur} />
                             )}
                           />
-                        </label>
-                      </div>
-                    </div>
-                  )
-                })}
+	                        </label>
+	                        <label className="wizard-span-2">
+	                          {account.type === 'investment' ? '投資（積立）' : '積立'}
+	                          <div className="wizard-unit-input">
+	                            <select
+	                              value={contributionUnit}
+	                              aria-label="積立の単位"
+	                              onChange={(event) => {
+	                                const nextUnit = event.target.value === 'year' ? 'year' : 'month'
+	                                setSavingsContributionUnits((prev) => ({ ...prev, [account.id]: nextUnit }))
+	                              }}
+	                            >
+	                              <option value="month">月</option>
+	                              <option value="year">年</option>
+	                            </select>
+	                            <Controller
+	                              control={control}
+	                              name={`savingsAccounts.${idx}.annualContribution` as const}
+	                              render={({ field: yenField }) => {
+	                                const annual = Number(yenField.value ?? 0)
+	                                const display = contributionUnit === 'month' ? Math.round(annual / 12) : annual
+	                                return (
+	                                  <YenInput
+	                                    value={Number.isFinite(display) ? display : 0}
+	                                    ariaLabel="積立額"
+	                                    onChange={(next) => {
+	                                      const numeric = Number(next ?? 0)
+	                                      const nextAnnual = contributionUnit === 'month' ? Math.round(numeric * 12) : numeric
+	                                      yenField.onChange(nextAnnual)
+	                                    }}
+	                                    onBlur={yenField.onBlur}
+	                                  />
+	                                )
+	                              }}
+	                            />
+	                          </div>
+	                          <span className="wizard-help">年額: {formatYen(Number(account.annualContribution ?? 0))}円</span>
+	                        </label>
+	                        <label>
+	                          利率（年）
+	                          <div className="wizard-unit-input">
+	                            <Controller
+	                              control={control}
+	                              name={`savingsAccounts.${idx}.annualInterestRate` as const}
+	                              render={({ field: rateField }) => {
+	                                const rate = Number(rateField.value ?? 0)
+	                                const percent = Number.isFinite(rate) ? Math.round(rate * 1000) / 10 : 0
+	                                return (
+	                                  <input
+	                                    type="number"
+	                                    inputMode="decimal"
+	                                    step="0.1"
+	                                    value={percent}
+	                                    onChange={(event) => {
+	                                      const raw = Number(event.target.value)
+	                                      rateField.onChange(Number.isFinite(raw) ? raw / 100 : 0)
+	                                    }}
+	                                    onBlur={rateField.onBlur}
+	                                  />
+	                                )
+	                              }}
+	                            />
+	                            <span className="wizard-unit">%</span>
+	                          </div>
+	                        </label>
+	                      </div>
+	                    </div>
+	                  )
+	                })}
               </div>
             </>
           ) : null}

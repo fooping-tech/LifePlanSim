@@ -13,7 +13,6 @@ export const WizardStepper = ({ steps, onStepSelect }: WizardStepperProps) => {
   return (
     <ol className="wizard-stepper" aria-label="入力ステップ">
       {steps.map((step) => {
-        const isClickable = Boolean(onStepSelect) && (step.status === 'done' || step.status === 'active')
         return (
           <li key={step.id} className={['wizard-stepper__step', `is-${step.status}`].join(' ')}>
             <span className="wizard-stepper__dot" aria-hidden />
@@ -22,10 +21,8 @@ export const WizardStepper = ({ steps, onStepSelect }: WizardStepperProps) => {
                 type="button"
                 className="wizard-stepper__btn"
                 onClick={() => {
-                  if (!isClickable) return
                   onStepSelect(step.id)
                 }}
-                disabled={!isClickable}
                 aria-current={step.status === 'active' ? 'step' : undefined}
               >
                 {step.label}

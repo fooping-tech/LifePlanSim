@@ -450,19 +450,24 @@ const computeVehicleCost = (
   return { total, purchase, disposalProceeds, loan, inspection, maintenance, parking, insurance }
 }
 
-const applySavingsInterest = (accounts: SavingsAccountState[], yearEvents: string[]): number => {
+const applySavingsInterest = (
+  accounts: SavingsAccountState[],
+  yearEvents: string[],
+): { total: number; byAccount: Record<string, number> } => {
   let total = 0
+  const byAccount: Record<string, number> = {}
   accounts.forEach((account) => {
     const growth = account.balance * account.annualInterestRate
     account.balance += growth
     if (growth !== 0) {
       total += growth
+      byAccount[account.id] = growth
     }
   })
   if (total !== 0) {
     yearEvents.push('運用益')
   }
-  return total
+  return { total, byAccount }
 }
 
 const coverDeficitWithSavings = (
@@ -692,7 +697,8 @@ export const simulateScenario = (
 
     totalExpenses += totalContribution
 
-    const investmentIncome = applySavingsInterest(savingsAccounts, yearEvents)
+    const interest = applySavingsInterest(savingsAccounts, yearEvents)
+    const investmentIncome = interest.total
     incomeForYear += investmentIncome
     totalIncome += investmentIncome
     const savingsSnapshot: Record<string, number> = {}
@@ -719,6 +725,7 @@ export const simulateScenario = (
       agesByResident,
       income: incomeForYear,
       investmentIncome,
+      investmentIncomeByAccount: interest.byAccount,
       expenses: {
         living: totalLivingCost,
         education: educationCost,

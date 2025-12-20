@@ -26,11 +26,14 @@ const computeDomain = (values: number[]) => {
   return { min: min - pad, max: max + pad }
 }
 
-export const LandingPreview = () => {
+export const LandingPreview = ({ scenarioId }: { scenarioId?: string }) => {
   const projections = useScenarioStore((state) => state.projections)
   const comparison = useScenarioStore((state) => state.comparison)
 
-  const primary = projections[0] ?? null
+  const primary =
+    (scenarioId ? projections.find((item) => item.scenarioId === scenarioId) : null) ??
+    projections[0] ??
+    null
   const [previewYear, setPreviewYear] = useState<number>(() => primary?.yearly[0]?.year ?? new Date().getFullYear())
 
   const primaryYearly = primary?.yearly ?? []
