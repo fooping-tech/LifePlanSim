@@ -2,9 +2,11 @@ import { useLayoutEffect, useMemo, useState } from 'react'
 import {
   VictoryAxis,
   VictoryBar,
+  VictoryArea,
   VictoryChart,
   VictoryCursorContainer,
   VictoryLine,
+  VictoryScatter,
   VictoryStack,
   VictoryTooltip,
   VictoryVoronoiContainer,
@@ -29,11 +31,17 @@ const formatAxisManYen = (value: number) =>
 
 const defaultChartPadding = { top: 28, bottom: 78, left: 96, right: 28 }
 const netWorthChartPadding = { top: 28, bottom: 70, left: 120, right: 28 }
+const axisBaseStyle = {
+  axis: { stroke: '#cbd5e1', strokeWidth: 1.2 },
+  grid: { stroke: 'rgba(148, 163, 184, 0.35)', strokeDasharray: '6,6' },
+}
 const dependentAxisStyle = {
+  ...axisBaseStyle,
   axisLabel: { padding: 62, fontSize: 12, fill: '#475569' },
   tickLabels: { fontSize: 10, padding: 4 },
 }
 const netWorthAxisStyle = {
+  ...axisBaseStyle,
   axisLabel: { padding: 72, fontSize: 12, fill: '#475569' },
   tickLabels: { fontSize: 10, padding: 6 },
 }
@@ -516,11 +524,21 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [kpiModal])
 
+  // 線グラフ用のグラデーションに透過度を掛けるヘルパー
+  const withAlpha = (hex: string, alpha: number) => {
+    const value = hex.replace('#', '')
+    const bigint = parseInt(value, 16)
+    const r = (bigint >> 16) & 255
+    const g = (bigint >> 8) & 255
+    const b = bigint & 255
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`
+  }
+
   return (
     <div className="scenario-results">
       <div className="results-split">
         <div className="results-split__main">
-          <div className="chart-block">
+          <div className="chart-block chart-block--net-worth">
             <div className="chart-block__header">
               <h3>{scenario.label} - 純資産×キャッシュフロー</h3>
               <span>最終: {formatCurrency(scenario.summary.finalNetWorth)}</span>
@@ -532,6 +550,8 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
                 width={chartWidth}
                 padding={netWorthChartPadding}
                 domain={{ y: [combinedDomain.min, combinedDomain.max] }}
+                domainPadding={{ x: 12, y: 24 }}
+                style={{ background: { fill: 'transparent' } }}
                 containerComponent={
                   <VictoryCursorContainer
                     cursorDimension="x"
@@ -546,14 +566,35 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
                   />
                 }
               >
-                <VictoryAxis tickFormat={(tick) => `${tick}`} />
+                <defs>
+                  <linearGradient id={`netWorthGradient-${scenario.id}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor={withAlpha(color, 0.28)} />
+                    <stop offset="100%" stopColor={withAlpha(color, 0.05)} />
+                  </linearGradient>
+                  <linearGradient id={`incomeGradient-${scenario.id}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor={withAlpha(INCOME_CATEGORY.color, 0.32)} />
+                    <stop offset="100%" stopColor={withAlpha(INCOME_CATEGORY.color, 0.06)} />
+                  </linearGradient>
+                </defs>
+                <VictoryAxis tickFormat={(tick) => `${tick}`} style={axisBaseStyle} />
                 <VictoryAxis dependentAxis tickFormat={formatAxisManYen} label="万円" style={netWorthAxisStyle} />
+                <VictoryArea
+                  data={scenario.netWorth}
+                  interpolation="catmullRom"
+                  style={{ data: { fill: `url(#netWorthGradient-${scenario.id})`, strokeWidth: 0 } }}
+                />
+                <VictoryArea
+                  data={scenario.cashIncomeSeries}
+                  interpolation="catmullRom"
+                  style={{ data: { fill: `url(#incomeGradient-${scenario.id})`, strokeWidth: 0 } }}
+                />
                 <VictoryStack>
                   {expenseCategories.map((cat) => (
                     <VictoryBar
                       key={cat.key}
                       data={scenario.cashFlowSeries.filter((entry: CashFlowSeriesEntry) => entry.category === cat.key)}
-                      style={{ data: { fill: cat.color, opacity: 0.85 } }}
+                      cornerRadius={{ top: 6 }}
+                      style={{ data: { fill: cat.color, opacity: 0.82 } }}
                       events={[
                         {
                           target: 'data',
@@ -570,9 +611,24 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
                 </VictoryStack>
                 <VictoryLine
                   data={scenario.cashIncomeSeries}
-                  style={{ data: { stroke: INCOME_CATEGORY.color, strokeWidth: 2.5 } }}
+                  interpolation="catmullRom"
+                  style={{ data: { stroke: INCOME_CATEGORY.color, strokeWidth: 2.8, strokeLinecap: 'round' } }}
                 />
-                <VictoryLine data={scenario.netWorth} style={{ data: { stroke: color, strokeWidth: 3 } }} />
+                <VictoryLine
+                  data={scenario.netWorth}
+                  interpolation="catmullRom"
+                  style={{ data: { stroke: color, strokeWidth: 3.2, strokeLinecap: 'round' } }}
+                />
+                <VictoryScatter
+                  data={scenario.netWorth}
+                  style={{ data: { fill: '#0b162a', stroke: color, strokeWidth: 2 } }}
+                  size={3}
+                />
+                <VictoryScatter
+                  data={scenario.cashIncomeSeries}
+                  style={{ data: { fill: '#052e16', stroke: INCOME_CATEGORY.color, strokeWidth: 2 } }}
+                  size={3}
+                />
               </VictoryChart>
             </div>
             <div className="chart-legend">
