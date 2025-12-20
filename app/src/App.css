@@ -1360,7 +1360,24 @@ details summary {
 }
 
 .waterfall-chart {
-  overflow-x: auto;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+.waterfall-chart svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+@media (max-width: 520px) {
+  .waterfall-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .waterfall-panel {
+    overflow-x: hidden;
+  }
 }
 
 .chart-reveal {

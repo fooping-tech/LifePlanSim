@@ -931,10 +931,13 @@ const WaterfallChart = ({ data, width = 640, height = 340 }: { data: WaterfallEn
   if (!data.length) {
     return <p>ウォーターフローのデータが不足しています。</p>
   }
+  const { setContainer, width: measuredWidth } = useMeasuredWidth()
+  const resolvedWidth = Math.max(260, Math.min(width, measuredWidth))
+  const resolvedHeight = Math.max(120, Math.round((height / width) * resolvedWidth))
   const paddingX = 60
   const paddingY = 30
-  const chartWidth = width - paddingX * 2
-  const chartHeight = height - paddingY * 2
+  const chartWidth = resolvedWidth - paddingX * 2
+  const chartHeight = resolvedHeight - paddingY * 2
   const yMax = Math.max(...data.map((entry) => Math.max(entry.y, entry.y0)))
   const yMin = Math.min(...data.map((entry) => Math.min(entry.y, entry.y0)))
   const range = yMax - yMin || 1
@@ -944,9 +947,22 @@ const WaterfallChart = ({ data, width = 640, height = 340 }: { data: WaterfallEn
   const zeroY = scaleY(0)
 
   return (
-    <div className="waterfall-chart">
-      <svg width={width} height={height} role="img" aria-label="ウォーターフロー">
-        <line x1={paddingX - 10} x2={width - paddingX + 10} y1={zeroY} y2={zeroY} stroke="#cbd5f5" strokeWidth={1} />
+    <div ref={setContainer} className="waterfall-chart">
+      <svg
+        width={resolvedWidth}
+        height={resolvedHeight}
+        viewBox={`0 0 ${resolvedWidth} ${resolvedHeight}`}
+        role="img"
+        aria-label="ウォーターフロー"
+      >
+        <line
+          x1={paddingX - 10}
+          x2={resolvedWidth - paddingX + 10}
+          y1={zeroY}
+          y2={zeroY}
+          stroke="#cbd5f5"
+          strokeWidth={1}
+        />
         {data.map((entry, idx) => {
           const startY = scaleY(entry.y)
           const endY = scaleY(entry.y0)
@@ -967,11 +983,11 @@ const WaterfallChart = ({ data, width = 640, height = 340 }: { data: WaterfallEn
               </text>
               <text
                 x={x + barWidth / 2}
-                y={height - 8}
+                y={resolvedHeight - 8}
                 textAnchor="middle"
                 fontSize={12}
                 fill="#475569"
-                transform={`rotate(-30 ${x + barWidth / 2},${height - 8})`}
+                transform={`rotate(-30 ${x + barWidth / 2},${resolvedHeight - 8})`}
               >
                 {entry.label}
               </text>
