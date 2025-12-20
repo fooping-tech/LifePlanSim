@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useScenarioStore } from '@store/scenarioStore'
 import { IconCalendar, IconChart } from '@components/icons'
 
@@ -36,17 +36,18 @@ export const LandingPreview = ({ scenarioId }: { scenarioId?: string }) => {
     null
   const [previewYear, setPreviewYear] = useState<number>(() => primary?.yearly[0]?.year ?? new Date().getFullYear())
 
-  const primaryYearly = primary?.yearly ?? []
+  const primaryYearly = useMemo(() => primary?.yearly ?? [], [primary])
   const previewEntry =
     primaryYearly.find((entry) => entry.year === previewYear) ?? primaryYearly[0] ?? null
 
-  const years = primaryYearly.map((entry) => entry.year)
-  const series = primaryYearly.map((entry) => entry.netWorth)
-  const domain = computeDomain(series)
+  const years = useMemo(() => primaryYearly.map((entry) => entry.year), [primaryYearly])
+  const series = useMemo(() => primaryYearly.map((entry) => entry.netWorth), [primaryYearly])
+  const domain = useMemo(() => computeDomain(series), [series])
 
-  const polyline = (() => {
+  // ミニチャート用に折れ線ポイントと塗りつぶしパスを算出する
+  const sparkline = useMemo(() => {
     if (!primaryYearly.length) {
-      return ''
+      return { points: '', area: '' }
     }
     const width = 360
     const height = 120
@@ -57,15 +58,23 @@ export const LandingPreview = ({ scenarioId }: { scenarioId?: string }) => {
     const values = primaryYearly.map((entry) => entry.netWorth)
     const n = values.length
     if (n <= 1) {
-      return ''
+      return { points: '', area: '' }
     }
     const toX = (i: number) => padX + (i / (n - 1)) * plotW
     const toY = (v: number) => {
       const t = (v - domain.min) / (domain.max - domain.min || 1)
       return padY + (1 - t) * plotH
     }
-    return values.map((v, i) => `${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(' ')
-  })()
+    const baseline = padY + plotH
+    const polylinePoints = values.map((v, i) => `${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(' ')
+    const linePath = values
+      .map((v, i) => `${i === 0 ? 'M' : 'L'} ${toX(i).toFixed(1)} ${toY(v).toFixed(1)}`)
+      .join(' ')
+    const areaPath = `${linePath} L ${toX(n - 1).toFixed(1)} ${baseline.toFixed(
+      1,
+    )} L ${toX(0).toFixed(1)} ${baseline.toFixed(1)} Z`
+    return { points: polylinePoints, area: areaPath }
+  }, [domain, primaryYearly])
 
   const firstNegative = comparison?.earliestNegativeYear?.year ?? primary?.summary.firstNegativeYear ?? null
 
@@ -93,19 +102,26 @@ export const LandingPreview = ({ scenarioId }: { scenarioId?: string }) => {
             </div>
           </div>
 
-      <div className="landing-preview__chart">
-        <div className="landing-preview__chart-header">
-          <strong>
-            <span className="landing-preview__icon" aria-hidden>
-              <IconChart />
-            </span>
-            純資産推移（ミニ）
-          </strong>
-          <span>{years.length ? `${years[0]}〜${years.at(-1)}` : ''}</span>
-        </div>
-        <svg width={360} height={120} role="img" aria-label="純資産推移のプレビュー">
-          <rect x={0} y={0} width={360} height={120} fill="#ffffff" rx={12} />
-              <polyline points={polyline} fill="none" stroke="#2563eb" strokeWidth={3} />
+          <div className="landing-preview__chart">
+            <div className="landing-preview__chart-header">
+              <strong>
+                <span className="landing-preview__icon" aria-hidden>
+                  <IconChart />
+                </span>
+                純資産推移（ミニ）
+              </strong>
+              <span>{years.length ? `${years[0]}〜${years.at(-1)}` : ''}</span>
+            </div>
+            <svg width={360} height={120} role="img" aria-label="純資産推移のプレビュー">
+              <defs>
+                <linearGradient id="landing-networth-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="rgba(37, 99, 235, 0.32)" />
+                  <stop offset="100%" stopColor="rgba(37, 99, 235, 0.08)" />
+                </linearGradient>
+              </defs>
+              <rect x={0} y={0} width={360} height={120} fill="#ffffff" rx={12} />
+              {sparkline.area ? <path d={sparkline.area} fill="url(#landing-networth-gradient)" /> : null}
+              <polyline points={sparkline.points} fill="none" stroke="#2563eb" strokeWidth={3} />
             </svg>
           </div>
 
