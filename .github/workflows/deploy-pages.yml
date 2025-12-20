@@ -1,21 +1,20 @@
-name: Deploy to GitHub Pages
+name: Deploy multi versions to GitHub Pages
 
 on:
   push:
-    branches: [main, master]
+    branches:
+      - "**"
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -32,10 +31,28 @@ jobs:
         working-directory: app
         run: npm ci
 
+      # ブランチ名をURLパスに安全にする（/ を - にする等）
+      - name: Compute deploy path
+        id: vars
+        shell: bash
+        run: |
+          BRANCH="${GITHUB_REF_NAME}"
+          SAFE_BRANCH="${BRANCH//\//-}"
+          echo "safe_branch=$SAFE_BRANCH" >> "$GITHUB_OUTPUT"
+
+          # main/master はルートにも出す
+          if [[ "$BRANCH" == "main" || "$BRANCH" == "master" ]]; then
+            echo "vite_base=/${{ github.event.repository.name }}/" >> "$GITHUB_OUTPUT"
+            echo "target_folder=." >> "$GITHUB_OUTPUT"
+          else
+            echo "vite_base=/${{ github.event.repository.name }}/versions/$SAFE_BRANCH/" >> "$GITHUB_OUTPUT"
+            echo "target_folder=versions/$SAFE_BRANCH" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build
         working-directory: app
         env:
-          VITE_BASE: /${{ github.event.repository.name }}/
+          VITE_BASE: ${{ steps.vars.outputs.vite_base }}
           VITE_BUILD_ID: ${{ github.run_number }}-${{ github.sha }}
         run: npm run build
 
@@ -43,23 +60,10 @@ jobs:
         working-directory: app
         run: cp dist/index.html dist/404.html
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
+      - name: Deploy to gh-pages (foldered)
+        uses: JamesIves/github-pages-deploy-action@v4
         with:
-          enablement: true
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: app/dist
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy
-        id: deployment
-        uses: actions/deploy-pages@v4
+          branch: gh-pages
+          folder: app/dist
+          target-folder: ${{ steps.vars.outputs.target_folder }}
+          clean: false
