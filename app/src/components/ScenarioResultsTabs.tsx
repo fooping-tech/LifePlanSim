@@ -2,6 +2,7 @@ import { useLayoutEffect, useMemo, useState } from 'react'
 import {
   VictoryAxis,
   VictoryBar,
+  VictoryArea,
   VictoryChart,
   VictoryCursorContainer,
   VictoryLine,
@@ -53,6 +54,23 @@ const computeDomain = (values: number[]) => {
   }
   const pad = (max - min) * 0.08
   return { min: min - pad, max: max + pad }
+}
+
+// 16進カラーを透明度付きのrgbaに変換する（グラデーション用のユーティリティ）
+const withAlpha = (hex: string, alpha: number) => {
+  const normalized = hex.replace('#', '')
+  if (normalized.length !== 6) return hex
+  const r = parseInt(normalized.slice(0, 2), 16)
+  const g = parseInt(normalized.slice(2, 4), 16)
+  const b = parseInt(normalized.slice(4, 6), 16)
+  const clamped = Math.min(Math.max(alpha, 0), 1)
+  return `rgba(${r}, ${g}, ${b}, ${clamped})`
+}
+
+// SVG内でユニークになるようにIDを調整する（Victoryの複数描画対策）
+const toGradientId = (prefix: string, id: string) => {
+  const safe = id.replace(/[^a-zA-Z0-9_-]/g, '') || 'default'
+  return `${prefix}-${safe}`
 }
 
 const findNearestPoint = <T extends { x: number; y: number }>(series: T[], year: number): T | null => {
@@ -344,20 +362,19 @@ export const ScenarioResultsTabs = () => {
     [projections, scenarios],
   )
 
-  const resolvedTab =
-    activeTab === SPECIAL_TABS.comparison ||
-    activeTab === SPECIAL_TABS.overview ||
-    chartData.some((scenario) => scenario.id === activeTab)
-      ? activeTab
-      : chartData[0]?.id ?? SPECIAL_TABS.overview
-
-  useLayoutEffect(() => {
-    if (!activeScenarioId) return
-    if (activeTab === SPECIAL_TABS.overview || activeTab === SPECIAL_TABS.comparison) return
-    if (activeTab === activeScenarioId) return
-    if (!chartData.some((scenario) => scenario.id === activeScenarioId)) return
-    setActiveTab(activeScenarioId)
-  }, [activeScenarioId, activeTab, chartData])
+  const resolvedTab = (() => {
+    const preferredTab =
+      activeScenarioId && chartData.some((scenario) => scenario.id === activeScenarioId)
+        ? activeScenarioId
+        : activeTab
+    if (preferredTab === SPECIAL_TABS.comparison || preferredTab === SPECIAL_TABS.overview) {
+      return preferredTab
+    }
+    if (chartData.some((scenario) => scenario.id === preferredTab)) {
+      return preferredTab
+    }
+    return chartData[0]?.id ?? SPECIAL_TABS.overview
+  })()
 
   if (!chartData.length) {
     return (
@@ -504,6 +521,9 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
     () => yearOptions.findIndex((year) => year === selectedYearResolved),
     [yearOptions, selectedYearResolved],
   )
+  // シナリオごとに塗りつぶしのグラデーションIDを固定してSVG内で被らないようにする
+  const netWorthGradientId = useMemo(() => toGradientId('networth', scenario.id), [scenario.id])
+  const incomeGradientId = useMemo(() => toGradientId('income', scenario.id), [scenario.id])
 
   useLayoutEffect(() => {
     if (!kpiModal) return
@@ -531,6 +551,7 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
                 height={340}
                 width={chartWidth}
                 padding={netWorthChartPadding}
+                domainPadding={{ x: 16, y: 42 }}
                 domain={{ y: [combinedDomain.min, combinedDomain.max] }}
                 containerComponent={
                   <VictoryCursorContainer
@@ -546,8 +567,44 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
                   />
                 }
               >
-                <VictoryAxis tickFormat={(tick) => `${tick}`} />
-                <VictoryAxis dependentAxis tickFormat={formatAxisManYen} label="万円" style={netWorthAxisStyle} />
+                <defs>
+                  <linearGradient id={netWorthGradientId} x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor={withAlpha(color, 0.32)} />
+                    <stop offset="100%" stopColor={withAlpha(color, 0.08)} />
+                  </linearGradient>
+                  <linearGradient id={incomeGradientId} x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor={withAlpha(INCOME_CATEGORY.color, 0.3)} />
+                    <stop offset="100%" stopColor={withAlpha(INCOME_CATEGORY.color, 0.08)} />
+                  </linearGradient>
+                </defs>
+                <VictoryAxis
+                  tickFormat={(tick) => `${tick}`}
+                  style={{
+                    axis: { stroke: '#cbd5f5', strokeWidth: 1.2 },
+                    tickLabels: { fill: '#0f172a', fontSize: 10, fontWeight: 600, padding: 5 },
+                    grid: { stroke: '#e2e8f0', strokeDasharray: '4 6', opacity: 0.85 },
+                  }}
+                />
+                <VictoryAxis
+                  dependentAxis
+                  tickFormat={formatAxisManYen}
+                  label="万円"
+                  style={{
+                    ...netWorthAxisStyle,
+                    axis: { stroke: '#cbd5f5', strokeWidth: 1.2 },
+                    grid: { stroke: '#e2e8f0', strokeDasharray: '4 6', opacity: 0.85 },
+                  }}
+                />
+                <VictoryArea
+                  data={scenario.netWorth}
+                  interpolation="monotoneX"
+                  style={{ data: { fill: `url(#${netWorthGradientId})`, strokeWidth: 0 } }}
+                />
+                <VictoryArea
+                  data={scenario.cashIncomeSeries}
+                  interpolation="monotoneX"
+                  style={{ data: { fill: `url(#${incomeGradientId})`, strokeWidth: 0 } }}
+                />
                 <VictoryStack>
                   {expenseCategories.map((cat) => (
                     <VictoryBar
@@ -570,9 +627,14 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
                 </VictoryStack>
                 <VictoryLine
                   data={scenario.cashIncomeSeries}
-                  style={{ data: { stroke: INCOME_CATEGORY.color, strokeWidth: 2.5 } }}
+                  interpolation="monotoneX"
+                  style={{ data: { stroke: INCOME_CATEGORY.color, strokeWidth: 3, strokeLinecap: 'round' } }}
                 />
-                <VictoryLine data={scenario.netWorth} style={{ data: { stroke: color, strokeWidth: 3 } }} />
+                <VictoryLine
+                  data={scenario.netWorth}
+                  interpolation="monotoneX"
+                  style={{ data: { stroke: color, strokeWidth: 3.2, strokeLinecap: 'round' } }}
+                />
               </VictoryChart>
             </div>
             <div className="chart-legend">
@@ -1026,6 +1088,7 @@ const CombinedCharts = ({
                   height={300}
                   width={netWorthWidth}
                   padding={netWorthChartPadding}
+                  domainPadding={{ x: 14, y: 32 }}
                   domain={{ y: [netWorthDomain.min, netWorthDomain.max] }}
                   containerComponent={
                     <VictoryCursorContainer
@@ -1053,13 +1116,30 @@ const CombinedCharts = ({
                     />
                   }
                 >
-                  <VictoryAxis tickFormat={(tick) => `${tick}`} />
-                  <VictoryAxis dependentAxis tickFormat={formatAxisManYen} label="万円" style={netWorthAxisStyle} />
+                  <VictoryAxis
+                    tickFormat={(tick) => `${tick}`}
+                    style={{
+                      axis: { stroke: '#cbd5f5', strokeWidth: 1.1 },
+                      tickLabels: { fill: '#0f172a', fontSize: 10, fontWeight: 600, padding: 5 },
+                      grid: { stroke: '#e2e8f0', strokeDasharray: '4 6', opacity: 0.82 },
+                    }}
+                  />
+                  <VictoryAxis
+                    dependentAxis
+                    tickFormat={formatAxisManYen}
+                    label="万円"
+                    style={{
+                      ...netWorthAxisStyle,
+                      axis: { stroke: '#cbd5f5', strokeWidth: 1.1 },
+                      grid: { stroke: '#e2e8f0', strokeDasharray: '4 6', opacity: 0.82 },
+                    }}
+                  />
                   {scenarios.map((scenario) => (
                     <VictoryLine
                       key={scenario.id}
                       data={scenario.netWorth}
-                      style={{ data: { stroke: scenario.color, strokeWidth: 2 } }}
+                      interpolation="monotoneX"
+                      style={{ data: { stroke: scenario.color, strokeWidth: 2.6, strokeLinecap: 'round' } }}
                     />
                   ))}
                 </VictoryChart>

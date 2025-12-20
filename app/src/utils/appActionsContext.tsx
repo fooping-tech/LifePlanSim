@@ -16,6 +16,8 @@ const AppActionsContext = createContext<AppActions | null>(null)
 
 export const AppActionsProvider = AppActionsContext.Provider
 
+// Fast Refreshの警告を抑止するため、フックのエクスポートを明示的に許可する
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAppActions = (): AppActions => {
   const value = useContext(AppActionsContext)
   if (!value) {
@@ -23,4 +25,3 @@ export const useAppActions = (): AppActions => {
   }
   return value
 }
-
