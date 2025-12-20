@@ -28,6 +28,7 @@ Deliver a browser-based interactive simulator that lets households model long-te
 - [x] (2025-12-15) Added first-launch onboarding: auto-open “かんたん入力” wizard with quick entry options (wizard / JSON import / AI).
 - [x] (2025-12-19) Added attribute-based preset recommendations (2〜3問→おすすめ→新規シナリオ作成→ウィザードで上書き).
 - [x] (2025-12-20) Made charts feel more premium: filled areas under net worth/income lines, smoother curves, and refined chart card styling.
+- [x] (2025-12-20) Improved mobile readability: switched to page scrolling on small screens, removed nested scroll traps in results/detail panes, and made the topbar sticky (without covering modals).
 
 ## Surprises & Discoveries
 
@@ -969,6 +970,62 @@ Milestone 4 (Validation & UX refinements) adds guardrails: highlight years where
       - 単一シナリオの「純資産」「収入」折れ線の下が塗られて表示される。
       - 全シナリオ純資産比較の折れ線も下が塗られて表示される（重ねても破綻しない）。
       - グリッド/軸/カードUIが統一され、見た目が “プレミアム” に見える。
+      - `npm run test` と `npm run build` が通る。
+
+47. Mobile-first UI review + scroll trap audit (スマホで見やすく全面見直し・スクロール不能箇所の洗い出し):
+    - Context / Problem:
+      - 現状は「画面全体スクロール」ではなく、固定高 + 内側スクロールに寄せたレイアウトになっている（`body/#root: height: 100vh`、`.app-shell: overflow: hidden`、`.right-column: overflow-y: auto` など）。
+      - スマホだと “どこをスクロールすれば良いか分かりにくい / ネストしたスクロールが引っかかる / iOSのアドレスバー伸縮で高さ計算がズレる” などが起きやすい。
+      - 目標は「スマホで一貫して読みやすい」「スクロールできない場所がない」を担保すること。
+
+    - Scope:
+      - 主要画面（ランディング/編集/結果/各種モーダル）をスマホ幅で再設計し、スクロール挙動を整理する。
+      - デザインは既存トーンを維持しつつ、タップ領域/余白/タイポグラフィをスマホ基準で最適化する。
+
+    - Audit findings (初期調査):
+      - “ページ全体” がスクロールしない前提のCSSが存在:
+        - `app/src/index.css` の `body`/`#root` が `height: 100vh`
+        - `app/src/App.css` の `.app-shell` が `height: 100vh/100dvh` + `overflow: hidden`
+      - メインコンテンツが内部スクロールになっている:
+        - `.right-column { overflow-y: auto; max-height: 100% }`
+      - 結果画面はさらにネストしたスクロールがある:
+        - `.results-split__detail { overflow-y: auto; position: sticky; max-height: calc(100dvh - 140px) }`
+      - これらはスマホで “スクロールが引っかかる/意図せず別領域がスクロールする” 原因になりやすい。
+
+    - Design (方針):
+      - スマホ幅では “ページ全体スクロール” を基本にし、ネストしたスクロール領域を最小化する。
+      - 内側スクロールが必要な場所は「モーダル本文」のみに限定し、`max-height` と安全領域を厳密に扱う（`dvh` + `env(safe-area-inset-*)`）。
+      - スクロールは iOS でも滑らかに（必要箇所に `-webkit-overflow-scrolling: touch`）。
+
+    - Implementation plan:
+      - Global scroll model (最優先):
+        - `app/src/index.css`: `body/#root` の `height: 100vh` をモバイル時に解除（`height: auto` / `min-height` のみ維持）し、OS UI の伸縮でも自然にスクロールできるようにする。
+        - `app/src/App.css`:
+          - モバイル向け media query で `.app-shell` の `overflow: hidden` を解除し、`height` 固定をやめる（`min-height: 100dvh` に寄せる）。
+          - `.right-column` の `overflow-y: auto` をモバイルでは `overflow: visible` にして “1本スクロール” に統一する。
+      - Results view scroll traps:
+        - モバイルでは `.results-split__detail` の `max-height` と `overflow-y` を解除し、sticky も無効化して自然な縦スクロールにする（既存の `@media (max-width: 1180px)` に追記）。
+        - チャートは横スクロール可能を維持（`.chart-block { overflow-x: auto }` を前提に、タップ/ドラッグで詰まらないか確認）。
+      - Overlays / modals:
+        - `.editor-overlay`, `.preset-modal`, `.kpi-modal` の “本文” が必ずスクロールできることを保証（`max-height` と `overflow: auto` の組み合わせ、`dvh` と safe-area）。
+        - 背景スクロール抑止を行う場合は、モーダル内スクロールが確実に効く実装に限定（iOS Safari を想定して検証）。
+      - Tap targets / readability:
+        - 主要ボタン/タブ/セレクトのタップ領域を 44px 目安に見直し。
+        - 見出し/余白/表の文字サイズをスマホで詰めすぎない（横スクロールが必要な表は “表コンテナだけ” を横スクロールに固定）。
+
+    - Verification checklist (“スクロールできない” の再発防止):
+      - iPhone Safari / Android Chrome 相当の幅で以下を確認（DevTools + 実機推奨）:
+        - ランディング: 下まで到達できる/ボタンが押せる
+        - 編集オーバーレイ: フォーム最下部まで到達できる、入力中に画面が跳ねない
+        - 結果: グラフ→詳細→表→注釈まで 1本の縦スクロールで到達できる
+        - 結果の右パネル相当（詳細）: モバイルで “別スクロール領域” になって詰まらない
+        - KPI/プリセット/AIダイアログ: 本文が確実にスクロールし、閉じる導線が常に見える
+        - “横スクロール” が必要な箇所（表/チャート）は意図したコンテナのみが横スクロールする
+
+    - Acceptance:
+      - スマホ表示で、ページ内に “スクロールできず内容が見切れる” 箇所がない。
+      - スクロールは基本 1本（ページ）で、ネストスクロールはモーダル本文など必要最小限。
+      - iOS Safari で `100vh` 起因の見切れ/操作不能が再現しない。
       - `npm run test` と `npm run build` が通る。
 
 ## Validation and Acceptance

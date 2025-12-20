@@ -37,6 +37,18 @@ body {
   height: 100vh;
 }
 
+@media (max-width: 900px) {
+  body {
+    height: auto;
+    min-height: 100dvh;
+  }
+
+  #root {
+    height: auto;
+    min-height: 100dvh;
+  }
+}
+
 button {
   border-radius: 8px;
   border: 1px solid #e2e8f0;

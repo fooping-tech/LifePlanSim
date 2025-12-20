@@ -1279,6 +1279,8 @@ details summary {
 
   .results-split__detail {
     position: static;
+    max-height: none;
+    overflow-y: visible;
   }
 }
 
@@ -1521,12 +1523,26 @@ details summary {
 }
 
 @media (max-width: 900px) {
+  .app-shell {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
   .results-panel {
     position: static;
   }
 
   .app-grid {
     padding: 0.75rem 0.75rem 1rem;
+    height: auto;
+    min-height: 0;
+  }
+
+  .right-column {
+    overflow: visible;
+    max-height: none;
+    padding-left: 0;
   }
 
   .panel {
@@ -1536,8 +1552,13 @@ details summary {
 
   .app-topbar {
     padding: 0 max(0.75rem, env(safe-area-inset-left));
+    padding-right: max(0.75rem, env(safe-area-inset-right));
+    padding-top: max(0px, env(safe-area-inset-top));
     letter-spacing: normal;
     gap: 0.5rem;
+    position: sticky;
+    top: 0;
+    z-index: 40;
   }
 
   .app-topbar__subtitle {
