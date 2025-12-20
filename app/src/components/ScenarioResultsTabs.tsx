@@ -927,14 +927,27 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
   )
 }
 
+const formatCompactYen = (value: number) => {
+  const sign = value < 0 ? '-' : ''
+  const abs = Math.abs(value)
+  if (abs >= 100_000_000) {
+    return `${sign}${Math.round((abs / 100_000_000) * 10) / 10}億`
+  }
+  if (abs >= 10_000) {
+    return `${sign}${Math.round(abs / 10_000).toLocaleString('ja-JP')}万`
+  }
+  return `${sign}${Math.round(abs).toLocaleString('ja-JP')}円`
+}
+
 const WaterfallChart = ({ data, width = 640, height = 340 }: { data: WaterfallEntry[]; width?: number; height?: number }) => {
+  const { setContainer, width: measuredWidth } = useMeasuredWidth()
+  const [activeKey, setActiveKey] = useState<string | null>(null)
   if (!data.length) {
     return <p>ウォーターフローのデータが不足しています。</p>
   }
-  const { setContainer, width: measuredWidth } = useMeasuredWidth()
   const resolvedWidth = Math.max(260, Math.min(width, measuredWidth))
   const resolvedHeight = Math.max(120, Math.round((height / width) * resolvedWidth))
-  const paddingX = 60
+  const paddingX = resolvedWidth < 420 ? 40 : 60
   const paddingY = 30
   const chartWidth = resolvedWidth - paddingX * 2
   const chartHeight = resolvedHeight - paddingY * 2
@@ -946,6 +959,10 @@ const WaterfallChart = ({ data, width = 640, height = 340 }: { data: WaterfallEn
   const barWidth = Math.max(20, slotWidth - 20)
   const zeroY = scaleY(0)
 
+  const labelMode: 'full' | 'compact' | 'selectedOnly' = slotWidth >= 90 ? 'full' : slotWidth >= 60 ? 'compact' : 'selectedOnly'
+  const valueFontSize = labelMode === 'full' ? 12 : 10
+  const selectedEntry = activeKey ? data.find((entry) => entry.key === activeKey) ?? null : null
+
   return (
     <div ref={setContainer} className="waterfall-chart">
       <svg
@@ -955,6 +972,11 @@ const WaterfallChart = ({ data, width = 640, height = 340 }: { data: WaterfallEn
         role="img"
         aria-label="ウォーターフロー"
       >
+        {labelMode === 'selectedOnly' && selectedEntry ? (
+          <text x={paddingX} y={Math.max(16, paddingY - 8)} fontSize={12} fill="#0f172a">
+            {selectedEntry.label}: {formatCurrency(selectedEntry.value)}
+          </text>
+        ) : null}
         <line
           x1={paddingX - 10}
           x2={resolvedWidth - paddingX + 10}
@@ -968,19 +990,35 @@ const WaterfallChart = ({ data, width = 640, height = 340 }: { data: WaterfallEn
           const endY = scaleY(entry.y0)
           const barHeight = Math.abs(endY - startY)
           const y = Math.min(startY, endY)
+          const valueLabelY = Math.max(14, y - 6)
           const x = paddingX + idx * slotWidth + (slotWidth - barWidth) / 2
+          const showValueLabel = labelMode !== 'selectedOnly'
+          const valueLabel = labelMode === 'full' ? formatCurrency(entry.value) : formatCompactYen(entry.value)
           return (
             <g key={entry.key}>
-              <rect x={x} y={y} width={barWidth} height={Math.max(barHeight, 2)} fill={entry.color} rx={4} />
-              <text
-                x={x + barWidth / 2}
-                y={y - 6}
-                textAnchor="middle"
-                fontSize={12}
-                fill="#0f172a"
-              >
-                {formatCurrency(entry.value)}
-              </text>
+              <rect
+                x={x}
+                y={y}
+                width={barWidth}
+                height={Math.max(barHeight, 2)}
+                fill={entry.color}
+                rx={4}
+                stroke={entry.key === activeKey ? 'rgba(15, 23, 42, 0.55)' : 'transparent'}
+                strokeWidth={entry.key === activeKey ? 2 : 0}
+                onClick={() => setActiveKey(entry.key)}
+                style={{ cursor: labelMode === 'selectedOnly' ? 'pointer' : 'default' }}
+              />
+              {showValueLabel ? (
+                <text
+                  x={x + barWidth / 2}
+                  y={valueLabelY}
+                  textAnchor="middle"
+                  fontSize={valueFontSize}
+                  fill="#0f172a"
+                >
+                  {valueLabel}
+                </text>
+              ) : null}
               <text
                 x={x + barWidth / 2}
                 y={resolvedHeight - 8}
