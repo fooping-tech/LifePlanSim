@@ -1056,12 +1056,14 @@ details summary {
   align-items: baseline;
   justify-content: space-between;
   gap: 0.45rem;
+  min-width: 0;
 }
 
 .results-detail__kpis span {
   font-size: 0.72rem;
   color: #64748b;
   white-space: nowrap;
+  min-width: 0;
 }
 
 .results-detail__kpis strong {
@@ -1069,6 +1071,7 @@ details summary {
   color: #0f172a;
   font-size: 0.9rem;
   white-space: nowrap;
+  min-width: 0;
 }
 
 .kpi-value-btn {
@@ -1085,6 +1088,7 @@ details summary {
   text-decoration: underline dotted rgba(148, 163, 184, 0.95);
   text-underline-offset: 3px;
   text-align: right;
+  min-width: 0;
 }
 
 .kpi-value-btn:hover {
@@ -1216,6 +1220,18 @@ details summary {
 @media (max-width: 520px) {
   .results-detail__kpis {
     grid-template-columns: 1fr;
+  }
+
+  .results-detail__kpis > div {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .results-detail__kpis strong,
+  .kpi-value-btn {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: right;
   }
 }
 
