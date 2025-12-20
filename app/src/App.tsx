@@ -696,9 +696,13 @@ const LandingScreen = ({
 	          </div>
 	        ) : null}
 		        <header className="lp-hero">
-		          <h1>もし来年から家計が苦しくなるなら、いつ気づきたいですか？</h1>
+              <div className="lp-hero__badges" aria-hidden>
+                <span className="lp-hero__badge">3分でわかる</span>
+                <span className="lp-hero__badge lp-hero__badge--soft">だいたいでOK</span>
+              </div>
+		          <h1>まずは“だいたい”でOK。家計の未来をのぞいてみよう</h1>
 		          <p className="lp-hero__subtitle">
-		            よくある質問に答えるだけで、「赤字のはじまり」と理由のあたりがつかめます。
+		            よくある質問に答えるだけ。あとから細かく直せるので、気軽に試せます。
 	          </p>
 	          <ul className="lp-hero__assurance" aria-label="安心ポイント">
 	            <li>
@@ -753,6 +757,11 @@ const LandingScreen = ({
 	                </button>
 	                <span className="lp-hero__cta-note">約3分 / 全{totalSteps}問</span>
 	              </div>
+                <ul className="lp-hero__tags" aria-label="補足">
+                  <li>会員登録なし</li>
+                  <li>端末に保存</li>
+                  <li>あとで修正OK</li>
+                </ul>
 	              <ul className="lp-quiz__steps" aria-label="このあと">
 	                <li>
 	                  <span className="lp-quiz__step-icon" aria-hidden>

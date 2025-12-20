@@ -927,17 +927,13 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
   )
 }
 
-const formatCompactYen = (value: number) => {
-  const sign = value < 0 ? '-' : ''
-  const abs = Math.abs(value)
-  if (abs >= 100_000_000) {
-    return `${sign}${Math.round((abs / 100_000_000) * 10) / 10}億`
-  }
-  if (abs >= 10_000) {
-    return `${sign}${Math.round(abs / 10_000).toLocaleString('ja-JP')}万`
-  }
-  return `${sign}${Math.round(abs).toLocaleString('ja-JP')}円`
+const formatManYenLabel = (valueYen: number) => {
+  const sign = valueYen < 0 ? '-' : ''
+  const man = Math.round(Math.abs(valueYen) / 10_000)
+  return `${sign}${man.toLocaleString('ja-JP')}万`
 }
+
+const formatManYenWithYen = (valueYen: number) => `${formatManYenLabel(valueYen)}（${formatCurrency(valueYen)}）`
 
 const WaterfallChart = ({ data, width = 640, height = 340 }: { data: WaterfallEntry[]; width?: number; height?: number }) => {
   const { setContainer, width: measuredWidth } = useMeasuredWidth()
@@ -974,7 +970,7 @@ const WaterfallChart = ({ data, width = 640, height = 340 }: { data: WaterfallEn
       >
         {labelMode === 'selectedOnly' && selectedEntry ? (
           <text x={paddingX} y={Math.max(16, paddingY - 8)} fontSize={12} fill="#0f172a">
-            {selectedEntry.label}: {formatCurrency(selectedEntry.value)}
+            {selectedEntry.label}: {formatManYenWithYen(selectedEntry.value)}
           </text>
         ) : null}
         <line
@@ -993,7 +989,7 @@ const WaterfallChart = ({ data, width = 640, height = 340 }: { data: WaterfallEn
           const valueLabelY = Math.max(14, y - 6)
           const x = paddingX + idx * slotWidth + (slotWidth - barWidth) / 2
           const showValueLabel = labelMode !== 'selectedOnly'
-          const valueLabel = labelMode === 'full' ? formatCurrency(entry.value) : formatCompactYen(entry.value)
+          const valueLabel = labelMode === 'full' ? formatManYenWithYen(entry.value) : formatManYenLabel(entry.value)
           return (
             <g key={entry.key}>
               <rect
