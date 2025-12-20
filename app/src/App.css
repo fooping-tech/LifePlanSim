@@ -772,6 +772,11 @@ details summary {
 .chart-block {
   margin-bottom: 1.25rem;
   overflow-x: auto;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 18px;
+  padding: 0.75rem 0.85rem 0.65rem;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
 }
 
 .chart-mode-switch {
@@ -818,6 +823,7 @@ details summary {
   border-radius: 3px;
   border: 1px solid rgba(15, 23, 42, 0.15);
   display: inline-block;
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.1);
 }
 
 .chart-info {
@@ -885,15 +891,23 @@ details summary {
   color: #475569;
 }
 
+.chart-block__header h3 {
+  margin: 0;
+  color: #0f172a;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
 .chart-hover-panel {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem 0.9rem;
   align-items: center;
   padding: 0.45rem 0.6rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid rgba(226, 232, 240, 0.95);
   border-radius: 12px;
-  background: #f8fafc;
+  background: rgba(248, 250, 252, 0.86);
+  backdrop-filter: blur(8px);
   font-size: 0.82rem;
   color: #334155;
   margin-bottom: 0.5rem;
@@ -1304,6 +1318,12 @@ details summary {
 
 .chart-reveal {
   overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: radial-gradient(1200px 420px at 15% -10%, rgba(14, 165, 233, 0.12) 0%, rgba(255, 255, 255, 0) 55%),
+    radial-gradient(900px 380px at 70% 0%, rgba(99, 102, 241, 0.1) 0%, rgba(255, 255, 255, 0) 50%),
+    #ffffff;
+  padding: 0.35rem 0.25rem 0;
 }
 
 .chart-reveal--animate svg {

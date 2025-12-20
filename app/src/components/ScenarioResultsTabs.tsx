@@ -1,5 +1,6 @@
 import { useLayoutEffect, useMemo, useState } from 'react'
 import {
+  VictoryArea,
   VictoryAxis,
   VictoryBar,
   VictoryChart,
@@ -29,14 +30,48 @@ const formatAxisManYen = (value: number) =>
 
 const defaultChartPadding = { top: 28, bottom: 78, left: 96, right: 28 }
 const netWorthChartPadding = { top: 28, bottom: 70, left: 120, right: 28 }
+
+const gridStyle = {
+  stroke: 'rgba(148, 163, 184, 0.38)',
+  strokeDasharray: '3,6',
+}
+
+const axisBaseStyle = {
+  axis: { stroke: '#cbd5e1' },
+  ticks: { stroke: '#cbd5e1', size: 4 },
+  tickLabels: { fontSize: 10, padding: 4, fill: '#475569' },
+  grid: gridStyle,
+}
+
 const dependentAxisStyle = {
+  ...axisBaseStyle,
   axisLabel: { padding: 62, fontSize: 12, fill: '#475569' },
-  tickLabels: { fontSize: 10, padding: 4 },
 }
+
 const netWorthAxisStyle = {
+  ...axisBaseStyle,
   axisLabel: { padding: 72, fontSize: 12, fill: '#475569' },
-  tickLabels: { fontSize: 10, padding: 6 },
+  tickLabels: { fontSize: 10, padding: 6, fill: '#475569' },
 }
+
+const makeAreaStyle = (fill: string, opacity: number) => ({
+  data: {
+    fill,
+    fillOpacity: opacity,
+    stroke: 'transparent',
+    pointerEvents: 'none',
+  },
+})
+
+const makeLineStyle = (stroke: string, width: number) => ({
+  data: {
+    stroke,
+    strokeWidth: width,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    filter: 'drop-shadow(0 10px 18px rgba(15, 23, 42, 0.12))',
+  },
+})
 
 const formatMillionYen = (value: number) =>
   new Intl.NumberFormat('ja-JP', { maximumFractionDigits: 1 }).format(value / 1_000_000)
@@ -546,7 +581,7 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
                   />
                 }
               >
-                <VictoryAxis tickFormat={(tick) => `${tick}`} />
+                <VictoryAxis tickFormat={(tick) => `${tick}`} style={axisBaseStyle} />
                 <VictoryAxis dependentAxis tickFormat={formatAxisManYen} label="万円" style={netWorthAxisStyle} />
                 <VictoryStack>
                   {expenseCategories.map((cat) => (
@@ -568,11 +603,24 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
                     />
                   ))}
                 </VictoryStack>
+                <VictoryArea
+                  data={scenario.cashIncomeSeries}
+                  interpolation="monotoneX"
+                  y0={() => (combinedDomain.min > 0 ? combinedDomain.min : 0)}
+                  style={makeAreaStyle(INCOME_CATEGORY.color, 0.16)}
+                />
+                <VictoryArea
+                  data={scenario.netWorth}
+                  interpolation="monotoneX"
+                  y0={() => combinedDomain.min}
+                  style={makeAreaStyle(color, 0.1)}
+                />
                 <VictoryLine
                   data={scenario.cashIncomeSeries}
-                  style={{ data: { stroke: INCOME_CATEGORY.color, strokeWidth: 2.5 } }}
+                  interpolation="monotoneX"
+                  style={makeLineStyle(INCOME_CATEGORY.color, 2.6)}
                 />
-                <VictoryLine data={scenario.netWorth} style={{ data: { stroke: color, strokeWidth: 3 } }} />
+                <VictoryLine data={scenario.netWorth} interpolation="monotoneX" style={makeLineStyle(color, 3.1)} />
               </VictoryChart>
             </div>
             <div className="chart-legend">
@@ -1053,13 +1101,23 @@ const CombinedCharts = ({
                     />
                   }
                 >
-                  <VictoryAxis tickFormat={(tick) => `${tick}`} />
+                  <VictoryAxis tickFormat={(tick) => `${tick}`} style={axisBaseStyle} />
                   <VictoryAxis dependentAxis tickFormat={formatAxisManYen} label="万円" style={netWorthAxisStyle} />
+                  {scenarios.map((scenario) => (
+                    <VictoryArea
+                      key={`${scenario.id}-area`}
+                      data={scenario.netWorth}
+                      interpolation="monotoneX"
+                      y0={() => netWorthDomain.min}
+                      style={makeAreaStyle(scenario.color, 0.08)}
+                    />
+                  ))}
                   {scenarios.map((scenario) => (
                     <VictoryLine
                       key={scenario.id}
                       data={scenario.netWorth}
-                      style={{ data: { stroke: scenario.color, strokeWidth: 2 } }}
+                      interpolation="monotoneX"
+                      style={makeLineStyle(scenario.color, 2.4)}
                     />
                   ))}
                 </VictoryChart>

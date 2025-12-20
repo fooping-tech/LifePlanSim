@@ -27,6 +27,7 @@ Deliver a browser-based interactive simulator that lets households model long-te
 - [x] (2025-12-15) Added cashflow year picker + per-year waterfall breakdown panel (single scenario + overview compare).
 - [x] (2025-12-15) Added first-launch onboarding: auto-open “かんたん入力” wizard with quick entry options (wizard / JSON import / AI).
 - [x] (2025-12-19) Added attribute-based preset recommendations (2〜3問→おすすめ→新規シナリオ作成→ウィザードで上書き).
+- [x] (2025-12-20) Made charts feel more premium: filled areas under net worth/income lines, smoother curves, and refined chart card styling.
 
 ## Surprises & Discoveries
 
@@ -941,6 +942,34 @@ Milestone 4 (Validation & UX refinements) adds guardrails: highlight years where
       - ポップアップは ×/背景/Esc で閉じられる
       - 表示される合計が、元のKPI値と一致する（丸め差は許容範囲）
       - `npm run build` が通る
+
+46. Fill line chart areas + refresh graph aesthetics (純資産/収入の折れ線を塗る・グラフをカッコよく):
+    - Context / Problem:
+      - 純資産・収入は “折れ線だけ” だと情報量が薄く、グラフの第一印象が地味になりやすい。
+      - 目標は「視認性」と「プレミアム感」を両立し、比較や変化量を直感的に掴めるようにする。
+
+    - Goal:
+      - 純資産（line）と収入（line）の内側（下側）を薄く塗り、面としてトレンドを把握できるようにする。
+      - 軸/グリッド/カードUIを整え、結果画面のグラフを “全面的にカッコよく” する。
+
+    - Design:
+      - 折れ線は `interpolation="monotoneX"` で滑らかにする。
+      - 面は低い `fillOpacity`（重ねても破綻しにくい）で、線は太め + 角丸 + 軽いドロップシャドウ。
+      - グリッドは薄い破線で、視線誘導を邪魔しない程度に入れる。
+
+    - Implementation:
+      - `app/src/components/ScenarioResultsTabs.tsx`
+        - `VictoryArea` を追加して、純資産/収入の面塗りをレンダリング（線は別で描画し最前面に）。
+        - Axis style を整理して grid/ticks/label を統一トーンにする。
+      - `app/src/App.css`
+        - `.chart-block` をカード化（背景グラデ/枠/影/余白）。
+        - `.chart-reveal` に内側背景を追加して、SVGが浮くようにする。
+
+    - Acceptance:
+      - 単一シナリオの「純資産」「収入」折れ線の下が塗られて表示される。
+      - 全シナリオ純資産比較の折れ線も下が塗られて表示される（重ねても破綻しない）。
+      - グリッド/軸/カードUIが統一され、見た目が “プレミアム” に見える。
+      - `npm run test` と `npm run build` が通る。
 
 ## Validation and Acceptance
 
