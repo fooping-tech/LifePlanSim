@@ -31,6 +31,7 @@ Deliver a browser-based interactive simulator that lets households model long-te
 - [x] (2025-12-20) Improved mobile readability: switched to page scrolling on small screens, removed nested scroll traps in results/detail panes, and made the topbar sticky (without covering modals).
 - [x] (2025-12-20) Cleaned up lint/build: removed state-sync effect from results tabs, adjusted `AppActions` context module for Fast Refresh lint rule, and re-validated lint/test/build.
 - [x] (2025-12-20) Implemented Mobile UX fixes (Step 48): “選択年” controls wrap on small screens, Wizard icon scaled down on phones, Wizard shows child education-cost summary, and editor overlay locks background scrolling.
+- [x] (2025-12-20) Fixed mobile scroll in 詳細条件編集: restored ScenarioForm scroll container (`sections-stack--scroll`) under the editor overlay so the form reliably scrolls on phones.
 
 ## Surprises & Discoveries
 

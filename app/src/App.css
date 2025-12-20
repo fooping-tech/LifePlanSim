@@ -1669,8 +1669,9 @@ details summary {
     display: none;
   }
 
-  .editor-panel__column--form .scenario-form {
-    overflow: auto;
+  /* Detail editor should scroll reliably on mobile: keep ScenarioForm's own scroll region. */
+  .editor-panel__body[data-mode='detail'] .editor-panel__column--form .scenario-form {
+    overflow: hidden;
   }
 
   .editor-panel__body[data-mode='wizard'] .editor-panel__column--form {
@@ -1678,8 +1679,9 @@ details summary {
     overscroll-behavior: contain;
   }
 
-  .editor-overlay .scenario-form .sections-stack--scroll {
-    overflow: visible;
+  .editor-panel__body[data-mode='detail'] .scenario-form .sections-stack--scroll {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     padding-right: 0;
   }
 
