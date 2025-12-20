@@ -29,7 +29,7 @@ const formatAxisManYen = (value: number) =>
   new Intl.NumberFormat('ja-JP', { maximumFractionDigits: 0 }).format(value / 10_000)
 
 const defaultChartPadding = { top: 28, bottom: 78, left: 96, right: 28 }
-const netWorthChartPadding = { top: 28, bottom: 70, left: 120, right: 28 }
+const netWorthChartPadding = { top: 28, bottom: 70, left: 30, right: 28 }
 
 const gridStyle = {
   stroke: 'rgba(148, 163, 184, 0.38)',
@@ -50,8 +50,8 @@ const dependentAxisStyle = {
 
 const netWorthAxisStyle = {
   ...axisBaseStyle,
-  axisLabel: { padding: 72, fontSize: 12, fill: '#475569' },
-  tickLabels: { fontSize: 10, padding: 6, fill: '#475569' },
+  axisLabel: { padding: 32, fontSize: 12, fill: '#475569' },
+  tickLabels: { fontSize: 10, padding: -14, fill: '#475569' },
 }
 
 const makeAreaStyle = (fill: string, opacity: number) => ({
