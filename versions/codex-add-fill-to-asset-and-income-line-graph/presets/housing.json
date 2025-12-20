@@ -1,0 +1,71 @@
+[
+  {
+    "id": "condo-35yr",
+    "title": "新築マンション・35年ローン",
+    "description": "築0年のマンションを35年ローンで購入。管理費と修繕費が高めの想定。",
+    "plan": {
+      "label": "新築マンション",
+      "type": "own",
+      "startYearOffset": 0,
+      "builtYear": 2025,
+      "mortgageRemaining": 42000000,
+      "monthlyMortgage": 115000,
+      "managementFeeMonthly": 15000,
+      "maintenanceReserveMonthly": 12000,
+      "extraAnnualCosts": 180000,
+      "purchaseCost": 0,
+      "saleValue": 0
+    }
+  },
+  {
+    "id": "house-20yr",
+    "title": "郊外戸建て・20年ローン残",
+    "description": "築10年の戸建てを購入しローン残が20年分あるケース。管理費は不要。",
+    "plan": {
+      "label": "郊外戸建て",
+      "type": "own",
+      "startYearOffset": 0,
+      "builtYear": 2015,
+      "mortgageRemaining": 22000000,
+      "monthlyMortgage": 92000,
+      "managementFeeMonthly": 0,
+      "maintenanceReserveMonthly": 8000,
+      "extraAnnualCosts": 120000,
+      "purchaseCost": 0,
+      "saleValue": 0
+    }
+  },
+  {
+    "id": "rental-to-own",
+    "title": "賃貸→リノベ戸建て住み替え",
+    "description": "当面は賃貸費用のみ、5年後にリノベローン付き戸建てへ住み替える想定。",
+    "plan": {
+      "label": "リノベ戸建て",
+      "type": "own",
+      "startYearOffset": 5,
+      "builtYear": 0,
+      "mortgageRemaining": 28000000,
+      "monthlyMortgage": 105000,
+      "managementFeeMonthly": 0,
+      "maintenanceReserveMonthly": 10000,
+      "extraAnnualCosts": 240000,
+      "purchaseCost": 0,
+      "saleValue": 0
+    }
+  },
+  {
+    "id": "rent-apartment",
+    "title": "賃貸アパート",
+    "description": "家賃＋共益費の賃貸モデル。住み替え用に期間を設定できます。",
+    "plan": {
+      "label": "賃貸アパート",
+      "type": "rent",
+      "startYearOffset": 0,
+      "monthlyRent": 110000,
+      "monthlyFees": 6000,
+      "extraAnnualCosts": 0,
+      "moveInCost": 0,
+      "moveOutCost": 0
+    }
+  }
+]
