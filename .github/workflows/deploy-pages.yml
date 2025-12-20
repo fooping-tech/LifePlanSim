@@ -2,15 +2,15 @@ name: Deploy multi versions to GitHub Pages
 
 on:
   push:
-    branches:
-      - "**"
+    branches-ignore:
+      - gh-pages
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: pages-${{ github.ref }}
+  group: pages-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
