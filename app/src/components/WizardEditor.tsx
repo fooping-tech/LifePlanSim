@@ -71,6 +71,30 @@ const writeWizardUiState = (state: WizardUiState) => {
 
 const formatYen = (value: number) => new Intl.NumberFormat('ja-JP').format(Math.round(value))
 
+const formatManYen = (valueYen: number, digits = 0) => {
+  const value = valueYen / 10_000
+  const factor = Math.pow(10, digits)
+  const rounded = Math.round(value * factor) / factor
+  return digits > 0 ? rounded.toFixed(digits) : String(Math.round(rounded))
+}
+
+const summarizeEducationBands = (resident: Resident): string => {
+  const bands = (resident.expenseBands ?? []).filter((band) => band.category === 'education' || band.category === 'lessons')
+  if (!bands.length) {
+    return '教育費: 未設定'
+  }
+  const byAge = new Map<number, number>()
+  bands.forEach((band) => {
+    for (let age = band.startAge; age <= band.endAge; age += 1) {
+      byAge.set(age, (byAge.get(age) ?? 0) + band.annualAmount)
+    }
+  })
+  const values = Array.from(byAge.values())
+  const peak = values.reduce((max, v) => (v > max ? v : max), 0)
+  const avg = values.reduce((sum, v) => sum + v, 0) / Math.max(1, values.length)
+  return `教育費: 平均${formatManYen(avg, 1)}万/年・ピーク${formatManYen(peak, 0)}万/年`
+}
+
 const annualFromMonthlyManYen = (monthlyManYen: number) => Math.round((monthlyManYen * 10_000 * 12) / 1000) * 1000
 
 type WizardEditorProps = {
@@ -406,6 +430,7 @@ export const WizardEditor = ({
                 {residentFields.map((field, idx) => {
                   const resident = (watchedValues.residents?.[idx] as Resident | undefined) ?? (field as unknown as Resident)
                   const isChild = (resident.baseNetIncome ?? 0) === 0 && (resident.currentAge ?? 0) < 25
+                  const educationSummary = isChild ? summarizeEducationBands(resident) : ''
                   const retirementEvent = (resident.incomeEvents ?? []).find(
                     (event) => event.type === 'retirement' || event.label === '退職金',
                   )
@@ -460,6 +485,7 @@ export const WizardEditor = ({
                         ) : null}
                       </div>
                       <div className="wizard-grid">
+                        {isChild ? <span className="wizard-help wizard-span-2">{educationSummary}</span> : null}
                         <label className="wizard-span-2">
                           名前
                           <input {...register(`residents.${idx}.name` as const)} placeholder={`例: ${idx === 0 ? '本人' : '配偶者'}`} />

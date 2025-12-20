@@ -29,6 +29,8 @@ Deliver a browser-based interactive simulator that lets households model long-te
 - [x] (2025-12-19) Added attribute-based preset recommendations (2〜3問→おすすめ→新規シナリオ作成→ウィザードで上書き).
 - [x] (2025-12-20) Made charts feel more premium: filled areas under net worth/income lines, smoother curves, and refined chart card styling.
 - [x] (2025-12-20) Improved mobile readability: switched to page scrolling on small screens, removed nested scroll traps in results/detail panes, and made the topbar sticky (without covering modals).
+- [x] (2025-12-20) Cleaned up lint/build: removed state-sync effect from results tabs, adjusted `AppActions` context module for Fast Refresh lint rule, and re-validated lint/test/build.
+- [x] (2025-12-20) Implemented Mobile UX fixes (Step 48): “選択年” controls wrap on small screens, Wizard icon scaled down on phones, Wizard shows child education-cost summary, and editor overlay locks background scrolling.
 
 ## Surprises & Discoveries
 
@@ -1028,16 +1030,67 @@ Milestone 4 (Validation & UX refinements) adds guardrails: highlight years where
       - iOS Safari で `100vh` 起因の見切れ/操作不能が再現しない。
       - `npm run test` と `npm run build` が通る。
 
+48. Mobile UX fixes (報告されたスマホ不具合の修正計画):
+    - Issues (報告内容):
+      - 結果画面の「選択年」操作が横スクロールしないと全体を見られない（UIがはみ出す）。
+      - かんたん入力（Wizard）のアイコンが大きすぎる。
+      - スマホ表示時に文字が小さく読みづらい（全体のタイポグラフィ）。
+      - かんたん入力の住人カードで、子供の教育費が確認できない（教育費が見えない/気づけない）。
+      - かんたん入力で “外側（背景/ページ）” と “内側（ウィザード）” の両方がスクロールできてしまう。外側はスクロールせず内側のみスクロールしてほしい。
+      - かんたん入力の確認画面でスクロールできない（外側がスクロールしていて内側が詰まる）。
+
+    - Goals:
+      - モバイルで横スクロールを強制されない（選択年ヘッダー/コントロールが折り返し・縮退して収まる）。
+      - Wizard の見た目がスマホに適正（アイコン/文字サイズ/余白）。
+      - Wizard で子供の教育費が “その場で” 分かる。
+      - Wizard オープン中は背景（外側）がスクロールしない。Wizard 本文（内側）は常にスクロールできる（確認画面含む）。
+
+    - Design / Approach:
+      - Results「選択年」: コントロールを 1行固定にしない。モバイルでは 2行（年ラベル/操作）に分けるか `flex-wrap` + `min-width: 0` で折り返し可能にする。
+      - Typography: モバイルでは基準フォントサイズを段階的に上げ、見出し/表/注釈の最小サイズも底上げする（入力は 16px 維持）。
+      - Wizard scroll model: Wizard 表示中は `body` スクロールをロックし、スクロールは Wizard の本文コンテナに一本化する。
+
+    - Implementation tasks:
+      - Results panel (選択年のはみ出し解消)
+        - `app/src/App.css`: `.results-detail__header`, `.results-detail__controls`, `.chart-inline-control select`, `.chart-inline-btn`
+          - モバイルで折り返し/縦積みに切り替え、横スクロール不要にする（例: `flex-wrap`, `gap` 調整、`select{max-width:100%}`）。
+      - Wizard icon sizing
+        - `app/src/components/WizardEditor.tsx` / `app/src/App.css`: アイコンのサイズ指定をスマホ向けに縮小（固定px→clamp、またはCSSクラスで制御）。
+      - Mobile typography uplift
+        - `app/src/index.css` / `app/src/App.css`: `@media (max-width: 900px)` で `body`（またはアプリルート）に `font-size` を設定し、主要テキストの下限を引き上げる。
+      - Wizard: child education cost visibility
+        - `app/src/components/WizardEditor.tsx`:
+          - 子供住人カードに “教育費（年/平均/ピークなど）” の小さな要約を追加。
+          - 参照元はシナリオの教育費設定（education bands 等）から推定/集計し、0/未設定時は「未設定」表示にする。
+      - Wizard: scroll lock + confirm step scroll
+        - `app/src/App.tsx`（または overlay コンポーネント）:
+          - Editor/Wizard オープン中に `document.body.style.overflow = 'hidden'`（or クラス付与）で背景スクロールを抑止、クローズで復帰。
+        - `app/src/App.css`:
+          - Wizard の本文領域に `overflow: auto` + `min-height: 0` を適用し、確認画面を含めて常に内側がスクロールするようにする。
+
+    - Verification checklist:
+      - モバイル幅で結果画面「選択年」が横スクロールなしで操作できる（年セレクト/←→が見切れない）。
+      - Wizard のアイコンが過大でない（他要素とバランスが取れる）。
+      - スマホで文字が読みやすい（本文/注釈/表の最小サイズが改善）。
+      - Wizard の住人（子供）で教育費の存在が確認できる（0/未設定も分かる）。
+      - Wizard 表示中、背景はスクロールしない。Wizard 本文は常にスクロールでき、確認画面でも詰まらない。
+
+    - Acceptance:
+      - 上記 6 点の不具合が再現しないこと。
+      - `npm run test` と `npm run build` が通ること。
+
 ## Validation and Acceptance
 
 Run commands from `LifePlanSim/app`:
 
     npm run lint
     npm run test
+    npm run build
     npm run dev
 
-- `npm run lint` confirms ESLint passes (verified 2025-02-14).
-- `npm run test` executes Vitest (1 file / 4 tests) covering income growth, expenses, and savings behaviors.
+- `npm run lint` confirms ESLint passes (verified 2025-12-20).
+- `npm run test` executes Vitest (1 file / 7 tests) covering income growth, expenses, and savings behaviors (verified 2025-12-20).
+- `npm run build` completes `tsc -b && vite build` (verified 2025-12-20).
 - `npm run dev` serves `http://localhost:5173/`; use it to duplicate scenarios, tweak resident events, confirm charts/tables update instantly, and exercise JSON import/export plus snapshot link copying. Negative-balance years highlight in the chart info panel.
 
 ## Idempotence and Recovery

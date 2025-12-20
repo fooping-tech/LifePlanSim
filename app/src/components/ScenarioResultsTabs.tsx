@@ -379,20 +379,18 @@ export const ScenarioResultsTabs = () => {
     [projections, scenarios],
   )
 
-  const resolvedTab =
-    activeTab === SPECIAL_TABS.comparison ||
-    activeTab === SPECIAL_TABS.overview ||
-    chartData.some((scenario) => scenario.id === activeTab)
-      ? activeTab
-      : chartData[0]?.id ?? SPECIAL_TABS.overview
-
-  useLayoutEffect(() => {
-    if (!activeScenarioId) return
-    if (activeTab === SPECIAL_TABS.overview || activeTab === SPECIAL_TABS.comparison) return
-    if (activeTab === activeScenarioId) return
-    if (!chartData.some((scenario) => scenario.id === activeScenarioId)) return
-    setActiveTab(activeScenarioId)
-  }, [activeScenarioId, activeTab, chartData])
+  const resolvedTab = (() => {
+    if (activeTab === SPECIAL_TABS.comparison || activeTab === SPECIAL_TABS.overview) {
+      return activeTab
+    }
+    if (activeScenarioId && chartData.some((scenario) => scenario.id === activeScenarioId)) {
+      return activeScenarioId
+    }
+    if (chartData.some((scenario) => scenario.id === activeTab)) {
+      return activeTab
+    }
+    return chartData[0]?.id ?? SPECIAL_TABS.overview
+  })()
 
   if (!chartData.length) {
     return (

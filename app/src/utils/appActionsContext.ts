@@ -23,4 +23,3 @@ export const useAppActions = (): AppActions => {
   }
   return value
 }
-
