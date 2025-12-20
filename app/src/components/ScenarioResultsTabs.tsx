@@ -461,7 +461,6 @@ interface ScenarioChartsProps {
 const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
   const { openEditor } = useAppActions()
   const duplicateScenario = useScenarioStore((state) => state.duplicateScenario)
-  const [view, setView] = useState<'netWorth' | 'cashFlow'>('netWorth')
   const [selectedYear, setSelectedYear] = useState<number>(() => scenario.yearly[0]?.year ?? new Date().getFullYear())
   const [kpiModal, setKpiModal] = useState<null | 'netWorth' | 'netCashFlow' | 'investmentIncome'>(null)
   const yearOptions = useMemo(() => scenario.yearly.map((entry) => entry.year), [scenario.yearly])
@@ -477,9 +476,15 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
     () => (selectedYearEntry ? buildCashFlowWaterfall(selectedYearEntry) : []),
     [selectedYearEntry],
   )
-  const { setContainer: setNetWorthContainer, width: netWorthWidth } = useMeasuredWidth()
-  const { setContainer: setCashFlowContainer, width: cashFlowWidth } = useMeasuredWidth()
-  const netWorthDomain = useMemo(() => computeDomain(scenario.netWorth.map((point) => point.y)), [scenario.netWorth])
+  const { setContainer: setChartContainer, width: chartWidth } = useMeasuredWidth()
+  const combinedDomain = useMemo(() => {
+    const expenseTotals = scenario.yearly.map((entry) =>
+      expenseCategories.reduce((sum, cat) => sum + (entry.expenses[cat.key as ExpenseKey] ?? 0), 0),
+    )
+    const incomeSeries = scenario.cashIncomeSeries.map((point) => point.y)
+    const netWorthSeries = scenario.netWorth.map((point) => point.y)
+    return computeDomain([...expenseTotals, ...incomeSeries, ...netWorthSeries])
+  }, [scenario.cashIncomeSeries, scenario.netWorth, scenario.yearly])
   const selectedAgesLabel = useMemo(() => {
     const meta = selectedYearEntry
     if (!meta?.agesByResident) {
@@ -513,143 +518,81 @@ const ScenarioCharts = ({ scenario, color }: ScenarioChartsProps) => {
 
   return (
     <div className="scenario-results">
-      <div className="sub-tab-nav" role="tablist" aria-label="グラフ切り替え">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={view === 'netWorth'}
-          className={['sub-tab-nav__btn', view === 'netWorth' ? 'is-active' : ''].join(' ')}
-          onClick={() => setView('netWorth')}
-        >
-          純資産推移
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={view === 'cashFlow'}
-          className={['sub-tab-nav__btn', view === 'cashFlow' ? 'is-active' : ''].join(' ')}
-          onClick={() => setView('cashFlow')}
-        >
-          キャッシュフロー
-        </button>
-      </div>
-
       <div className="results-split">
         <div className="results-split__main">
-          {view === 'netWorth' ? (
-            <div className="chart-block">
-              <div className="chart-block__header">
-                <h3>{scenario.label} - 純資産推移</h3>
-                <span>最終: {formatCurrency(scenario.summary.finalNetWorth)}</span>
-              </div>
-              <div ref={setNetWorthContainer} className="chart-reveal chart-reveal--animate">
-                <VictoryChart
-                  theme={VictoryTheme.material}
-                  height={300}
-                  width={netWorthWidth}
-                  padding={netWorthChartPadding}
-                  domain={{ y: [netWorthDomain.min, netWorthDomain.max] }}
-                  containerComponent={
-                    <VictoryCursorContainer
-                      cursorDimension="x"
-                      cursorLabel={() => ''}
-                      cursorLabelComponent={<VictoryTooltip flyoutStyle={{ display: 'none' }} style={{ display: 'none' }} />}
-                      onCursorChange={(value) => {
-                        if (typeof value !== 'number' || !Number.isFinite(value)) {
-                          return
-                        }
-                        setSelectedYear(Math.round(value))
-                      }}
-                    />
-                  }
-                >
-                  <VictoryAxis tickFormat={(tick) => `${tick}`} />
-                  <VictoryAxis dependentAxis tickFormat={formatAxisManYen} label="万円" style={netWorthAxisStyle} />
-                  <VictoryLine data={scenario.netWorth} style={{ data: { stroke: color, strokeWidth: 3 } }} />
-                </VictoryChart>
-              </div>
-              <p className="chart-note">年を選ぶと右側に内訳（ウォーターフォール）とイベントが表示されます。</p>
+          <div className="chart-block">
+            <div className="chart-block__header">
+              <h3>{scenario.label} - 純資産×キャッシュフロー</h3>
+              <span>最終: {formatCurrency(scenario.summary.finalNetWorth)}</span>
             </div>
-          ) : (
-            <div className="chart-block">
-              <div className="chart-block__header">
-                <h3>{scenario.label} - キャッシュフロー</h3>
-              </div>
-              <div ref={setCashFlowContainer}>
-                <VictoryChart
-                  theme={VictoryTheme.material}
-                  height={340}
-                  width={cashFlowWidth}
-                  padding={defaultChartPadding}
-                  containerComponent={
-                    <VictoryVoronoiContainer
-                      voronoiDimension="x"
-                      labels={() => ''}
-                      onActivated={(points) => {
-                        const first = points?.[0] as { x?: unknown } | undefined
-                        const year = typeof first?.x === 'number' ? first.x : Number(first?.x)
-                        if (!Number.isFinite(year)) return
-                        setSelectedYear(Math.round(year))
-                      }}
-                    />
-                  }
-                >
-                  <VictoryAxis tickFormat={(tick) => `${tick}`} />
-                  <VictoryAxis dependentAxis tickFormat={formatAxisManYen} label="万円" style={dependentAxisStyle} />
-                  <VictoryBar
-                    data={scenario.cashIncomeSeries}
-                    style={{ data: { fill: INCOME_CATEGORY.color, opacity: 0.9 } }}
-                    events={[
-                      {
-                        target: 'data',
-                        eventHandlers: {
-                          onClick: (_event, props) => {
-                            setSelectedYear(Math.round(props.datum.x))
-                            return null
-                          },
-                        },
-                      },
-                    ]}
+            <div ref={setChartContainer} className="chart-reveal chart-reveal--animate">
+              <VictoryChart
+                theme={VictoryTheme.material}
+                height={340}
+                width={chartWidth}
+                padding={netWorthChartPadding}
+                domain={{ y: [combinedDomain.min, combinedDomain.max] }}
+                containerComponent={
+                  <VictoryCursorContainer
+                    cursorDimension="x"
+                    cursorLabel={() => ''}
+                    cursorLabelComponent={<VictoryTooltip flyoutStyle={{ display: 'none' }} style={{ display: 'none' }} />}
+                    onCursorChange={(value) => {
+                      if (typeof value !== 'number' || !Number.isFinite(value)) {
+                        return
+                      }
+                      setSelectedYear(Math.round(value))
+                    }}
                   />
-                  <VictoryStack>
-                    {expenseCategories.map((cat) => (
-                      <VictoryBar
-                        key={cat.key}
-                        data={scenario.cashFlowSeries
-                          .filter((entry: CashFlowSeriesEntry) => entry.category === cat.key)
-                          .map((entry) => ({ ...entry, y: -entry.y }))}
-                        style={{ data: { fill: cat.color } }}
-                        events={[
-                          {
-                            target: 'data',
-                            eventHandlers: {
-                              onClick: (_event, props) => {
-                                setSelectedYear(Math.round(props.datum.x))
-                                return null
-                              },
+                }
+              >
+                <VictoryAxis tickFormat={(tick) => `${tick}`} />
+                <VictoryAxis dependentAxis tickFormat={formatAxisManYen} label="万円" style={netWorthAxisStyle} />
+                <VictoryStack>
+                  {expenseCategories.map((cat) => (
+                    <VictoryBar
+                      key={cat.key}
+                      data={scenario.cashFlowSeries.filter((entry: CashFlowSeriesEntry) => entry.category === cat.key)}
+                      style={{ data: { fill: cat.color, opacity: 0.85 } }}
+                      events={[
+                        {
+                          target: 'data',
+                          eventHandlers: {
+                            onClick: (_event, props) => {
+                              setSelectedYear(Math.round(props.datum.x))
+                              return null
                             },
                           },
-                        ]}
-                      />
-                    ))}
-                  </VictoryStack>
-                </VictoryChart>
-              </div>
-              <div className="chart-legend">
-                <div className="chart-legend__item">
-                  <span className="chart-legend__swatch" style={{ backgroundColor: INCOME_CATEGORY.color }} />
-                  {INCOME_CATEGORY.label}
-                </div>
-                {expenseCategories.map((cat) => (
-                  <div key={cat.key} className="chart-legend__item">
-                    <span className="chart-legend__swatch" style={{ backgroundColor: cat.color }} />
-                    {cat.label}
-                  </div>
-                ))}
-              </div>
-              <p className="chart-note">棒をクリックすると右側の内訳が更新されます。</p>
+                        },
+                      ]}
+                    />
+                  ))}
+                </VictoryStack>
+                <VictoryLine
+                  data={scenario.cashIncomeSeries}
+                  style={{ data: { stroke: INCOME_CATEGORY.color, strokeWidth: 2.5 } }}
+                />
+                <VictoryLine data={scenario.netWorth} style={{ data: { stroke: color, strokeWidth: 3 } }} />
+              </VictoryChart>
             </div>
-          )}
+            <div className="chart-legend">
+              <div className="chart-legend__item">
+                <span className="chart-legend__swatch" style={{ backgroundColor: color }} />
+                純資産（折れ線）
+              </div>
+              <div className="chart-legend__item">
+                <span className="chart-legend__swatch" style={{ backgroundColor: INCOME_CATEGORY.color }} />
+                収入（折れ線）
+              </div>
+              {expenseCategories.map((cat) => (
+                <div key={cat.key} className="chart-legend__item">
+                  <span className="chart-legend__swatch" style={{ backgroundColor: cat.color }} />
+                  {cat.label}（積み上げ）
+                </div>
+              ))}
+            </div>
+            <p className="chart-note">年を選ぶと右側に内訳（ウォーターフォール）とイベントが表示されます。</p>
+          </div>
         </div>
 
         <aside className="results-split__detail" aria-label="選択年の詳細">
