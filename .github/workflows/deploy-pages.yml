@@ -54,7 +54,10 @@ jobs:
         env:
           VITE_BASE: ${{ steps.vars.outputs.vite_base }}
           VITE_BUILD_ID: ${{ github.run_number }}-${{ github.sha }}
-        run: npm run build
+        run: |
+          echo "vite_base=${{ steps.vars.outputs.vite_base }}"
+          echo "target_folder=${{ steps.vars.outputs.target_folder }}"
+          npm run build -- --base "${{ steps.vars.outputs.vite_base }}"
 
       - name: SPA fallback (optional)
         working-directory: app
