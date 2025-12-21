@@ -505,17 +505,6 @@
   margin-bottom: 0.25rem;
 }
 
-body.reduced-color {
-  --c-income: #64748b;
-  --c-living: #64748b;
-  --c-education: #64748b;
-  --c-housing: #64748b;
-  --c-vehicle: #64748b;
-  --c-savings: #64748b;
-  --c-other: #64748b;
-  --c-warning: #64748b;
-}
-
 .collapse-icon {
   font-size: 1.1rem;
   width: 1.5rem;

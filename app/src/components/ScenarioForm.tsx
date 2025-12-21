@@ -220,23 +220,13 @@ export const ScenarioForm = () => {
   })
 
   const [collapsedMap, setCollapsedMap] = useState<Record<string, boolean>>({})
-  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const [residentPresetOpen, setResidentPresetOpen] = useState(false)
   const [housingPresetOpen, setHousingPresetOpen] = useState(false)
   const [vehiclePresetOpen, setVehiclePresetOpen] = useState(false)
   const [livingPresetOpen, setLivingPresetOpen] = useState(false)
   const [livingPresetTargetIndex, setLivingPresetTargetIndex] = useState<number | null>(null)
   const [savingsPresetOpen, setSavingsPresetOpen] = useState(false)
-  const [compactMode, setCompactMode] = useState(true)
-  const [reducedColorMode, setReducedColorMode] = useState(false)
   const [sliderMode, setSliderMode] = useState(false)
-
-  useEffect(() => {
-    if (typeof document === 'undefined') {
-      return
-    }
-    document.body.classList.toggle('reduced-color', reducedColorMode)
-  }, [reducedColorMode])
 
   if (!scenario) {
     return (
@@ -2006,19 +1996,11 @@ export const ScenarioForm = () => {
   ]
 
   return (
-    <section className={['panel scenario-form', compactMode ? 'is-compact' : ''].join(' ')}>
+    <section className="panel scenario-form is-compact">
       <header className="panel__header">
         <div className="panel__header-row">
           <h2>条件の編集</h2>
           <div>
-            <button
-              type="button"
-              className="link-button"
-              aria-pressed={compactMode}
-              onClick={() => setCompactMode((prev) => !prev)}
-            >
-              {compactMode ? '表示を通常に' : '表示をコンパクトに'}
-            </button>
             <button
               type="button"
               className="link-button"
@@ -2027,40 +2009,11 @@ export const ScenarioForm = () => {
             >
               {sliderMode ? 'スライダを隠す' : 'スライダを表示'}
             </button>
-            <button
-              type="button"
-              className="link-button"
-              aria-pressed={reducedColorMode}
-              onClick={() => setReducedColorMode((prev) => !prev)}
-            >
-              {reducedColorMode ? '色を戻す' : '色を抑える'}
-            </button>
           </div>
         </div>
         <p>入力するとグラフがリアルタイムで更新されます。</p>
       </header>
       <form className="form-grid">
-        <div className="section-jump section-jump--pinned" role="navigation" aria-label="条件セクション一覧">
-          {sections.map((section) => (
-            <button
-              key={section.id}
-              type="button"
-              className="section-jump__btn"
-              onClick={() => {
-                setCollapsedMap((prev) => ({
-                  ...prev,
-                  [section.id]: false,
-                }))
-                sectionRefs.current[section.id]?.scrollIntoView({
-                  behavior: 'smooth',
-                  block: 'start',
-                })
-              }}
-            >
-              {section.label}
-            </button>
-          ))}
-        </div>
         <div className="sections-stack sections-stack--scroll">
           {sections.map((section) => {
             const collapsed = collapsedMap[section.id] ?? true
@@ -2070,9 +2023,6 @@ export const ScenarioForm = () => {
               <div
                 key={section.id}
                 className={['collapsible-section', decor.className].filter(Boolean).join(' ')}
-                ref={(el) => {
-                  sectionRefs.current[section.id] = el
-                }}
               >
                 <button
                   type="button"

@@ -1123,6 +1123,27 @@ Milestone 4 (Validation & UX refinements) adds guardrails: highlight years where
       - 上記 6 点の不具合が再現しないこと。
       - `npm run test` と `npm run build` が通ること。
 
+49. Simplify “詳細” editor UI (モバイル最優先の簡素化):
+    - Goal: 条件編集（詳細）をモバイルで入力しやすくするため、UIの“切替系”と“常時表示ナビ”を減らして入力領域を最大化する。
+    - Changes:
+      - セクションジャンプ（基本情報/住人/住宅… のタブ/チップ列）を削除:
+        - モバイルでは横幅/縦幅を圧迫し、フォーム領域が狭くなるため。
+        - 代替: 各セクションは折りたたみカード＋要約行で探しやすくする（既存の折りたたみを活用）。
+      - 「表示を通常/コンパクト」を削除して常にコンパクト:
+        - `ScenarioForm` は常に `is-compact` を適用し、入力密度を固定する（モバイルの操作量を減らす）。
+      - 「色を抑える/戻す」を削除して常に色あり:
+        - `reduced-color` のトグルを撤廃し、セマンティックカラー（収入/住宅/車…）は常に有効にする。
+    - Implementation points:
+      - `app/src/components/ScenarioForm.tsx`:
+        - `compactMode` / `reducedColorMode` の state と切替ボタンを削除。
+        - `<section className="panel scenario-form">` に常時 `is-compact` を付与。
+        - `.section-jump`（セクション一覧ナビ）を削除（必要ならモバイル時のみ非表示でも可）。
+      - `app/src/App.css`:
+        - `body.reduced-color { ... }` を削除、または未使用として放置しない（将来の混乱防止）。
+    - Acceptance:
+      - モバイルで入力領域が広がり、セクション一覧がなくても迷いにくい（折りたたみ＋要約で追える）。
+      - `npm run lint/test/build` が通る。
+
 ## Validation and Acceptance
 
 Run commands from `LifePlanSim/app`:
